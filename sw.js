@@ -1,4 +1,4 @@
-const CACHE_NAME = "ev-log-cache-v2";
+const CACHE_NAME = "ev-log-cache-v3";
 
 const CORE_ASSETS = [
   "./",
