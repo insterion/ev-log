@@ -18,22 +18,62 @@
 
   // ---------- Filter ----------
   let currentFilter = localStorage.getItem("ev_month_filter") || "all"; // all | this | last
+  const uiFilter = {
+    search: "",
+    type: "all",
+    from: "",
+    to: ""
+  };
+
+  // ---------- Undo delete ----------
+  let undoTimer = null;
+  let lastDeleted = null; // { entry, index }
 
   // ---------- Toast ----------
   let toastTimer = null;
   function toast(text, kind=""){
     const el = $("toast");
     if (!el) return;
-    el.textContent = text || "";
+
+    el.innerHTML = `<div class="toastRow"><div>${escapeHtml(text || "")}</div></div>`;
     el.className = "";
     if (kind) el.classList.add(kind);
     el.classList.add("show");
 
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>{
-      el.classList.remove("show");
-      setTimeout(()=>{ el.textContent=""; el.className=""; }, 220);
-    }, 1800);
+    toastTimer = setTimeout(()=> hideToast(), 1800);
+  }
+
+  function toastUndo(text, onUndo){
+    const el = $("toast");
+    if (!el) return;
+
+    el.innerHTML = `
+      <div class="toastRow">
+        <div>${escapeHtml(text || "")}</div>
+        <div class="toastActions">
+          <button class="toastBtn" id="toastUndoBtn" type="button">Undo</button>
+          <button class="toastBtn" id="toastDismissBtn" type="button">Dismiss</button>
+        </div>
+      </div>
+    `;
+    el.className = "";
+    el.classList.add("show");
+
+    const u = $("toastUndoBtn");
+    const d = $("toastDismissBtn");
+    u?.addEventListener("click", () => { hideToast(); onUndo?.(); });
+    d?.addEventListener("click", () => hideToast());
+
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> hideToast(), 5000);
+  }
+
+  function hideToast(){
+    const el = $("toast");
+    if (!el) return;
+    el.classList.remove("show");
+    setTimeout(()=>{ el.innerHTML=""; el.className=""; }, 220);
   }
 
   // ---------- Utils ----------
@@ -206,8 +246,26 @@
       : "Няма записи.";
   }
 
-  // ---------- Filter ----------
-  function filterEntries(entries){
+  // ---------- Filters ----------
+  function passesFilters(e){
+    const s = (uiFilter.search || "").trim().toLowerCase();
+    if (s){
+      const note = (e.note || "").toLowerCase();
+      if (!note.includes(s)) return false;
+    }
+    if (uiFilter.type && uiFilter.type !== "all"){
+      if ((e.type || "custom") !== uiFilter.type) return false;
+    }
+    if (uiFilter.from){
+      if (e.date < uiFilter.from) return false;
+    }
+    if (uiFilter.to){
+      if (e.date > uiFilter.to) return false;
+    }
+    return true;
+  }
+
+  function applyMonthFilter(entries){
     if (currentFilter === "all") return entries;
     const thisKey = thisMonthKey();
     const lastKey = lastMonthKey();
@@ -215,6 +273,11 @@
       const k = monthKeyFromISO(e.date);
       return currentFilter === "this" ? k === thisKey : k === lastKey;
     });
+  }
+
+  function applyAllFilters(entries){
+    const a = applyMonthFilter(entries);
+    return a.filter(passesFilters);
   }
 
   // ---------- Edit drafts ----------
@@ -303,13 +366,12 @@
     $("e_kwh").focus();
   }
 
-  // Last kWh buttons
+  // Last kWh buttons (render only when Quick is opened)
   function buildLastKwhButtons(state){
     const host = $("lastKwhBtns");
     if (!host) return;
     host.innerHTML = "";
 
-    // pick last 3 unique kWh values (most recent createdAt)
     const sorted = [...state.entries].sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
     const uniq = [];
     for (const e of sorted){
@@ -369,9 +431,6 @@
     saveState(state);
     render(state);
 
-    // update last kWh buttons after add
-    buildLastKwhButtons(state);
-
     $("e_kwh").value = "";
     $("e_note").value = "";
     $("e_date").value = date;
@@ -383,11 +442,36 @@
 
   function deleteEntry(state, id){
     cancelEdit();
-    state.entries = state.entries.filter(e => e.id !== id);
+
+    const idx = state.entries.findIndex(e => e.id === id);
+    if (idx < 0) return;
+
+    const removed = state.entries[idx];
+    state.entries.splice(idx, 1);
     saveState(state);
     render(state);
-    buildLastKwhButtons(state);
-    toast("Изтрито ✅", "good");
+
+    // store undo info
+    lastDeleted = { entry: removed, index: idx };
+    if (undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { lastDeleted = null; }, 5000);
+
+    toastUndo("Deleted. Undo?", () => undoDelete(state));
+  }
+
+  function undoDelete(state){
+    if (!lastDeleted) return;
+    const { entry, index } = lastDeleted;
+
+    // insert back near original position
+    const safeIndex = Math.min(Math.max(index, 0), state.entries.length);
+    state.entries.splice(safeIndex, 0, entry);
+    state.entries.sort(stableEntrySort);
+
+    lastDeleted = null;
+    saveState(state);
+    render(state);
+    toast("Restored ✅", "good");
   }
 
   function latestEntry(entries){
@@ -431,8 +515,7 @@
     state.entries.sort(stableEntrySort);
     saveState(state);
     render(state);
-    buildLastKwhButtons(state);
-    toast("Копирано ✅", "good");
+    toast("Copied ✅", "good");
   }
 
   // ---------- Export/Import ----------
@@ -452,7 +535,7 @@
     const payload = JSON.stringify(state, null, 2);
     if (navigator.clipboard?.writeText){
       navigator.clipboard.writeText(payload)
-        .then(()=> toast("Export копиран ✅", "good"))
+        .then(()=> toast("Export copied ✅", "good"))
         .catch(()=> { downloadText(`ev_export_${nowISODate()}.json`, payload); toast("Clipboard fail → file ✅","good"); });
     } else {
       downloadText(`ev_export_${nowISODate()}.json`, payload);
@@ -471,7 +554,7 @@
       toast("Import OK ✅", "good");
       return newState;
     }catch(e){
-      toast("Грешен JSON ❌", "bad");
+      toast("Invalid JSON ❌", "bad");
       return null;
     }
   }
@@ -482,11 +565,10 @@
     return s;
   }
 
-  function exportCSV(state){
-    cancelEdit();
+  function csvFromEntries(state, entries){
     const basePublic = num(state.prices.public);
     const header = ["Date","Type","kWh","Price_per_kWh","Cost_GBP","Saved_vs_BasePublic_GBP","Note"];
-    const rows = state.entries.map(e => {
+    const rows = entries.map(e => {
       const k = num(e.kwh);
       const p = num(e.price);
       const cost = k * p;
@@ -503,12 +585,25 @@
       ];
     });
 
-    const csv = [header, ...rows]
+    return [header, ...rows]
       .map(r => r.map(csvEscape).join(","))
       .join("\n");
+  }
 
-    downloadText(`ev_log_${nowISODate()}.csv`, csv);
-    toast("CSV изтеглен ✅", "good");
+  function exportCSVAll(state){
+    cancelEdit();
+    const csv = csvFromEntries(state, state.entries);
+    downloadText(`ev_log_${nowISODate()}_all.csv`, csv);
+    toast("CSV downloaded ✅", "good");
+  }
+
+  function exportCSVThisMonth(state){
+    cancelEdit();
+    const key = thisMonthKey();
+    const entries = state.entries.filter(e => monthKeyFromISO(e.date) === key);
+    const csv = csvFromEntries(state, entries);
+    downloadText(`ev_log_${nowISODate()}_this_month.csv`, csv);
+    toast("CSV (this month) ✅", "good");
   }
 
   function downloadJSONFile(state){
@@ -520,7 +615,7 @@
     localStorage.setItem("ev_last_backup", new Date().toISOString());
     render(state);
 
-    toast("Backup файл ✅", "good");
+    toast("Backup file ✅", "good");
   }
 
   function restoreFromJSONText(text){
@@ -567,7 +662,7 @@
     return { estMiles, iceCost, diff };
   }
 
-  // ---------- Monthly summary text ----------
+  // ---------- Monthly summary ----------
   function monthlyLine(label, totals){
     return `${label}: ${fmt(totals.kwh,1)} kWh · ${fmtGBP(totals.cost,2)} · saved ${fmtGBP(totals.saved,2)}`;
   }
@@ -620,35 +715,25 @@
 
     const thisKey = thisMonthKey();
     const lastKey = lastMonthKey();
-
     const thisEntries = state.entries.filter(e => monthKeyFromISO(e.date) === thisKey);
     const lastEntries = state.entries.filter(e => monthKeyFromISO(e.date) === lastKey);
-
     const thisTotals = calcTotalsForEntries(state, thisEntries);
     const lastTotals = calcTotalsForEntries(state, lastEntries);
 
     const monthLineEl = $("monthLine");
-    if (thisTotals.kwh > 0 || thisTotals.cost > 0 || thisTotals.saved !== 0){
-      monthLineEl.textContent = `This month: ${fmt(thisTotals.kwh,1)} kWh · ${fmtGBP(thisTotals.cost,2)} · Saved ${fmtGBP(thisTotals.saved,2)}`;
-      monthLineEl.style.display = "block";
-    } else {
-      monthLineEl.textContent = "";
-      monthLineEl.style.display = "none";
-    }
+    monthLineEl.textContent = thisTotals.kwh || thisTotals.cost || thisTotals.saved
+      ? `This month: ${fmt(thisTotals.kwh,1)} kWh · ${fmtGBP(thisTotals.cost,2)} · Saved ${fmtGBP(thisTotals.saved,2)}`
+      : "";
+    monthLineEl.style.display = monthLineEl.textContent ? "block" : "none";
 
     const lastMonthLineEl = $("lastMonthLine");
-    if (lastTotals.kwh > 0 || lastTotals.cost > 0 || lastTotals.saved !== 0){
-      lastMonthLineEl.textContent = `Last month: ${fmt(lastTotals.kwh,1)} kWh · ${fmtGBP(lastTotals.cost,2)} · Saved ${fmtGBP(lastTotals.saved,2)}`;
-      lastMonthLineEl.style.display = "block";
-    } else {
-      lastMonthLineEl.textContent = "";
-      lastMonthLineEl.style.display = "none";
-    }
+    lastMonthLineEl.textContent = lastTotals.kwh || lastTotals.cost || lastTotals.saved
+      ? `Last month: ${fmt(lastTotals.kwh,1)} kWh · ${fmtGBP(lastTotals.cost,2)} · Saved ${fmtGBP(lastTotals.saved,2)}`
+      : "";
+    lastMonthLineEl.style.display = lastMonthLineEl.textContent ? "block" : "none";
 
-    // Summary monthly quick view
     $("m_this_line").textContent = `${fmt(thisTotals.kwh,1)} kWh`;
     $("m_this_sub").textContent = `${fmtGBP(thisTotals.cost,2)} · saved ${fmtGBP(thisTotals.saved,2)}`;
-
     $("m_last_line").textContent = `${fmt(lastTotals.kwh,1)} kWh`;
     $("m_last_sub").textContent = `${fmtGBP(lastTotals.cost,2)} · saved ${fmtGBP(lastTotals.saved,2)}`;
 
@@ -665,7 +750,7 @@
       }
     }
 
-    const visibleEntries = filterEntries(state.entries);
+    const visibleEntries = applyAllFilters(state.entries);
     const totalsVisible = calcTotalsForEntries(state, visibleEntries);
 
     const tbody = $("tbody");
@@ -748,42 +833,49 @@
       if (saved > 0) tdSaved.className = "good";
       if (saved < 0) tdSaved.className = "bad";
 
-      const tdCopy = document.createElement("td");
-      const copyBtn = document.createElement("button");
-      copyBtn.className = "mini";
-      copyBtn.textContent = "Copy";
-      copyBtn.onclick = () => duplicateEntry(state, e);
-      tdCopy.appendChild(copyBtn);
+      // Row menu (single column)
+      const tdMenu = document.createElement("td");
+      const menu = document.createElement("details");
+      menu.className = "rowMenu";
+      const sum = document.createElement("summary");
+      sum.textContent = "⋯";
+      menu.appendChild(sum);
 
-      const tdEdit = document.createElement("td");
-      const editBtn = document.createElement("button");
-      editBtn.className = "mini";
-      editBtn.textContent = isEditing ? "Save" : "Edit";
-      editBtn.onclick = () => {
-        if (isEditing){
-          saveEdit(state);
-        } else {
-          cancelEdit();
-          startEdit(e);
-          render(state);
-        }
-      };
-      tdEdit.appendChild(editBtn);
+      const box = document.createElement("div");
+      box.className = "rowMenuBox";
 
-      const tdDel = document.createElement("td");
-      tdDel.className = "right";
-      const delBtn = document.createElement("button");
-      delBtn.className = "mini";
-      delBtn.textContent = isEditing ? "Cancel" : "Del";
-      delBtn.onclick = () => {
-        if (isEditing){
-          cancelEdit();
-          render(state);
-        } else {
-          deleteEntry(state, e.id);
-        }
+      const btnCopy = document.createElement("button");
+      btnCopy.className = "mini";
+      btnCopy.type = "button";
+      btnCopy.textContent = "Copy";
+      btnCopy.onclick = () => { menu.open = false; duplicateEntry(state, e); };
+
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "mini";
+      btnEdit.type = "button";
+      btnEdit.textContent = isEditing ? "Save" : "Edit";
+      btnEdit.onclick = () => {
+        menu.open = false;
+        if (isEditing) saveEdit(state);
+        else { cancelEdit(); startEdit(e); render(state); }
       };
-      tdDel.appendChild(delBtn);
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "mini";
+      btnDel.type = "button";
+      btnDel.textContent = isEditing ? "Cancel" : "Del";
+      btnDel.onclick = () => {
+        menu.open = false;
+        if (isEditing){ cancelEdit(); render(state); }
+        else deleteEntry(state, e.id);
+      };
+
+      box.appendChild(btnCopy);
+      box.appendChild(btnEdit);
+      box.appendChild(btnDel);
+
+      menu.appendChild(box);
+      tdMenu.appendChild(menu);
 
       tr.appendChild(tdDate);
       tr.appendChild(tdType);
@@ -791,9 +883,7 @@
       tr.appendChild(tdPrice);
       tr.appendChild(tdCost);
       tr.appendChild(tdSaved);
-      tr.appendChild(tdCopy);
-      tr.appendChild(tdEdit);
-      tr.appendChild(tdDel);
+      tr.appendChild(tdMenu);
 
       tbody.appendChild(tr);
     }
@@ -808,7 +898,7 @@
       <th></th>
       <th>${fmtGBP(totalsVisible.cost,2)}</th>
       <th>${fmtGBP(totalsVisible.saved,2)}</th>
-      <th colspan="3"></th>
+      <th></th>
     `;
     tfoot.appendChild(trf);
 
@@ -837,8 +927,25 @@
     $("e_date").value = nowISODate();
     syncInputs(state);
     autoFillEntryPrice(state);
-    buildLastKwhButtons(state);
     render(state);
+
+    // Quick panel: collapsed by default, remember state
+    const quickPanel = $("quickPanel");
+    if (quickPanel){
+      quickPanel.open = (localStorage.getItem("ev_quick_open") === "1");
+      if (quickPanel.open) buildLastKwhButtons(state);
+
+      quickPanel.addEventListener("toggle", () => {
+        localStorage.setItem("ev_quick_open", quickPanel.open ? "1" : "0");
+        if (quickPanel.open) buildLastKwhButtons(state);
+      });
+    }
+
+    // Filters panel: collapsed by default
+    const filterPanel = $("filterPanel");
+    if (filterPanel){
+      filterPanel.open = false;
+    }
 
     // Prices/investment/compare inputs
     [
@@ -863,11 +970,15 @@
     $("qt_home").addEventListener("click", ()=> setTypeQuick(state, "home"));
     $("qt_home_exp").addEventListener("click", ()=> setTypeQuick(state, "home_exp"));
 
+    // Core actions
     $("addBtn").addEventListener("click", ()=> addEntry(state));
     $("sameBtn").addEventListener("click", ()=> applySameAsLast(state));
 
+    // More menu actions
     $("exportBtn").addEventListener("click", ()=> exportJSON(state));
-    $("csvBtn").addEventListener("click", ()=> exportCSV(state));
+    $("csvBtn").addEventListener("click", ()=> exportCSVAll(state));
+    $("csvThisMonthBtn").addEventListener("click", ()=> exportCSVThisMonth(state));
+
     $("backupFileBtn").addEventListener("click", ()=> downloadJSONFile(state));
     $("restoreFileBtn").addEventListener("click", ()=>{
       restoreJSONFile((newState)=>{
@@ -876,7 +987,7 @@
         render(state);
         autoFillEntryPrice(state);
         syncInputs(state);
-        buildLastKwhButtons(state);
+        if ($("quickPanel")?.open) buildLastKwhButtons(state);
       });
     });
 
@@ -888,7 +999,7 @@
         render(state);
         autoFillEntryPrice(state);
         syncInputs(state);
-        buildLastKwhButtons(state);
+        if ($("quickPanel")?.open) buildLastKwhButtons(state);
       }
     });
 
@@ -898,15 +1009,48 @@
       state.entries = [];
       saveState(state);
       render(state);
-      buildLastKwhButtons(state);
-      toast("Изчистено ✅", "good");
+      toast("Cleared ✅", "good");
     });
 
+    // Month filter
     $("monthFilter").addEventListener("change", (e)=>{
       currentFilter = e.target.value;
       localStorage.setItem("ev_month_filter", currentFilter);
       cancelEdit();
       render(state);
+    });
+
+    // Filters UI
+    $("toggleFiltersBtn").addEventListener("click", ()=>{
+      const fp = $("filterPanel");
+      fp.open = !fp.open;
+      // scroll to it a bit for clarity
+      if (fp.open) fp.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    const fSearch = $("f_search");
+    const fType = $("f_type");
+    const fFrom = $("f_from");
+    const fTo = $("f_to");
+
+    function onFilterChange(){
+      uiFilter.search = fSearch.value || "";
+      uiFilter.type = fType.value || "all";
+      uiFilter.from = fFrom.value || "";
+      uiFilter.to = fTo.value || "";
+      cancelEdit();
+      render(state);
+    }
+
+    [fSearch, fType, fFrom, fTo].forEach(el => el.addEventListener("input", onFilterChange));
+
+    $("clearFiltersBtn").addEventListener("click", ()=>{
+      fSearch.value = "";
+      fType.value = "all";
+      fFrom.value = "";
+      fTo.value = "";
+      onFilterChange();
+      toast("Filters cleared ✅","good");
     });
 
     // Copy monthly summary
@@ -918,12 +1062,16 @@
       const tThis = calcTotalsForEntries(state, thisEntries);
       const tLast = calcTotalsForEntries(state, lastEntries);
 
+      const allTotals = calcTotalsForEntries(state, state.entries);
+      const inv = num(state.investment.charger) + num(state.investment.install);
+      const remain = inv + allTotals.publicCost - allTotals.saved;
+
       const lines = [
         "EV Log — monthly summary",
         monthlyLine("This month", tThis),
         monthlyLine("Last month", tLast),
-        `Investment: ${fmtGBP(num(state.investment.charger)+num(state.investment.install),0)}`,
-        `Payback remaining: ${fmtGBP((num(state.investment.charger)+num(state.investment.install)) + calcTotalsForEntries(state, state.entries).publicCost - calcTotalsForEntries(state, state.entries).saved, 2)}`
+        `Investment: ${fmtGBP(inv,0)}`,
+        `Payback remaining: ${fmtGBP(remain,2)}`
       ].join("\n");
 
       copyText(lines);
@@ -956,4 +1104,3 @@
 
   wire();
 })();
-
