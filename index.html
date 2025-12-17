@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>EV Log</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#000000">
 
@@ -16,10 +15,11 @@
     <div class="topbar">
       <div class="brand">
         <h1>EV Log</h1>
-        <div class="sub">clean • fast • prices saved per entry</div>
+        <div class="sub">charging + maintenance • prices saved per entry</div>
       </div>
       <div class="tabs">
         <button class="tabbtn active" data-tab="log">Log</button>
+        <button class="tabbtn" data-tab="costs">Costs</button>
         <button class="tabbtn" data-tab="summary">Summary</button>
         <button class="tabbtn" data-tab="settings">Settings</button>
         <button class="tabbtn" data-tab="compare">Compare</button>
@@ -30,7 +30,6 @@
 
       <!-- LOG -->
       <div id="tab-log" class="section active">
-
         <div class="row">
           <div>
             <label>Дата</label>
@@ -86,10 +85,9 @@
           </details>
         </div>
 
-        <!-- Quick (hidden by default) -->
+        <!-- Quick -->
         <details class="quickDetails" id="quickPanel">
           <summary class="quickSummary">Quick</summary>
-
           <div class="quickInner">
             <div class="quickRow">
               <div class="quickTitle">Quick type</div>
@@ -100,7 +98,6 @@
                 <button class="pill" type="button" id="qt_home_exp">Home Exp</button>
               </div>
             </div>
-
             <div class="quickRow" style="margin-top:8px">
               <div class="quickTitle">Last kWh</div>
               <div class="quickBtns" id="lastKwhBtns"></div>
@@ -108,15 +105,14 @@
           </div>
         </details>
 
-        <!-- Filters (hidden by default) -->
+        <!-- Filters -->
         <details class="filterDetails" id="filterPanel">
           <summary class="filterSummary">Filters</summary>
           <div class="divider"></div>
-
           <div class="row3">
             <div>
-              <label>Search (note)</label>
-              <input id="f_search" type="text" placeholder="octopus / bp / work..." />
+              <label>Search (note + attachments)</label>
+              <input id="f_search" type="text" placeholder="octopus / invoice / drive..." />
             </div>
             <div>
               <label>Type</label>
@@ -180,6 +176,101 @@
         </table>
       </div>
 
+      <!-- COSTS -->
+      <div id="tab-costs" class="section">
+        <div class="row3">
+          <div>
+            <label>Дата</label>
+            <input id="c_date" type="date" />
+          </div>
+          <div>
+            <label>Applies to</label>
+            <select id="c_vehicle">
+              <option value="ev" selected>EV</option>
+              <option value="ice">ICE</option>
+            </select>
+          </div>
+          <div>
+            <label>Категория</label>
+            <select id="c_cat">
+              <option value="tyres">Tyres</option>
+              <option value="brakes">Brakes</option>
+              <option value="service">Service</option>
+              <option value="mot">MOT</option>
+              <option value="insurance">Insurance</option>
+              <option value="tax">Tax</option>
+              <option value="repairs">Repairs</option>
+              <option value="accessories">Accessories</option>
+              <option value="other" selected>Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row3" style="margin-top:10px">
+          <div>
+            <label>£ (amount)</label>
+            <input id="c_amount" type="number" step="0.01" min="0" placeholder="120.00" />
+          </div>
+          <div>
+            <label>Mileage (optional)</label>
+            <input id="c_miles" type="number" step="1" min="0" placeholder="45000" />
+          </div>
+          <div>
+            <label>Описание / бележка</label>
+            <input id="c_note" type="text" placeholder="Front pads + labour / 2 tyres..." />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="c_addBtn" type="button">Add cost</button>
+
+          <details style="margin-left:auto">
+            <summary class="tabbtn" style="padding:8px 10px">⋯ More</summary>
+            <div class="moreWrap">
+              <div class="row3" style="margin:0; align-items:end">
+                <div>
+                  <label>Spread over (default)</label>
+                  <select id="c_spread_default">
+                    <option value="oneoff" selected>One-off</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div style="grid-column: span 2;">
+                  <div class="small">
+                    “Spread over” влияе на сравненията по месеци (This/Last). One-off остава както е.
+                  </div>
+                </div>
+              </div>
+
+              <button id="c_csvBtn" class="mini" type="button">CSV (costs)</button>
+            </div>
+          </details>
+        </div>
+
+        <details style="margin-top:10px">
+          <summary>Totals (for current period)</summary>
+          <div class="divider"></div>
+          <div class="small" id="costsTotalsLine"></div>
+        </details>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Category</th>
+              <th>£</th>
+              <th>Spread</th>
+              <th>Mileage</th>
+              <th>Note</th>
+              <th>⋯</th>
+            </tr>
+          </thead>
+          <tbody id="costsTbody"></tbody>
+          <tfoot id="costsTfoot"></tfoot>
+        </table>
+      </div>
+
       <!-- SUMMARY -->
       <div id="tab-summary" class="section">
         <div class="kpi">
@@ -193,6 +284,18 @@
             <div class="v" id="tot_cost">—</div>
             <div class="small">£</div>
           </div>
+
+          <div class="box">
+            <div class="t">EV costs (period)</div>
+            <div class="v" id="ev_costs_period">—</div>
+            <div class="small">£ (spread applied)</div>
+          </div>
+          <div class="box">
+            <div class="t">ICE costs (period)</div>
+            <div class="v" id="ice_costs_period">—</div>
+            <div class="small">£ (spread applied)</div>
+          </div>
+
           <div class="box">
             <div class="t">Публични зареждания</div>
             <div class="v" id="public_cost">—</div>
@@ -203,6 +306,7 @@
             <div class="v" id="saved_vs_public">—</div>
             <div class="small">£ (за НЕ-публични)</div>
           </div>
+
           <div class="box">
             <div class="t">Инвестиция</div>
             <div class="v" id="inv_total">—</div>
@@ -216,6 +320,7 @@
         </div>
 
         <div class="divider"></div>
+
         <div class="kpi">
           <div class="box">
             <div class="t">This month</div>
@@ -294,7 +399,7 @@
       <!-- COMPARE -->
       <div id="tab-compare" class="section">
         <details open>
-          <summary>ICE vs EV</summary>
+          <summary>ICE vs EV (realistic)</summary>
           <div class="divider"></div>
           <div class="row3">
             <div>
@@ -310,30 +415,53 @@
               <input id="fuel_price" type="number" step="0.01" min="0" value="1.50" />
             </div>
           </div>
+
+          <div class="row3" style="margin-top:10px">
+            <div>
+              <label>ICE maintenance fallback (£/mile)</label>
+              <input id="ice_maint_per_mile" type="number" step="0.001" min="0" value="0.03" />
+            </div>
+            <div style="grid-column: span 2;">
+              <div class="small" style="margin-top:22px">
+                Fallback се използва само ако нямаш ICE costs записи за избрания период.
+              </div>
+            </div>
+          </div>
         </details>
 
         <div class="divider"></div>
 
         <div class="kpi">
           <div class="box">
-            <div class="t">Оценени мили (от твоите записи)</div>
+            <div class="t">Мили (за периода)</div>
             <div class="v" id="est_miles">—</div>
-            <div class="small">miles</div>
+            <div class="small">estimated miles</div>
           </div>
           <div class="box">
-            <div class="t">ICE цена за тези мили</div>
-            <div class="v" id="ice_cost">—</div>
-            <div class="small">£</div>
+            <div class="t">EV total</div>
+            <div class="v" id="ev_total_real">—</div>
+            <div class="small">£ (charging + EV costs)</div>
           </div>
           <div class="box">
-            <div class="t">EV цена за тези мили</div>
-            <div class="v" id="ev_cost_for_miles">—</div>
-            <div class="small">£ (реално платено)</div>
+            <div class="t">ICE total</div>
+            <div class="v" id="ice_total_real">—</div>
+            <div class="small">£ (fuel + ICE maint)</div>
           </div>
           <div class="box">
-            <div class="t">Разлика (ICE − EV)</div>
+            <div class="t">Difference (ICE − EV)</div>
             <div class="v" id="ice_vs_ev_diff">—</div>
             <div class="small">£ (плюс = EV по-евтино)</div>
+          </div>
+
+          <div class="box">
+            <div class="t">EV £/mile</div>
+            <div class="v" id="ev_per_mile">—</div>
+            <div class="small">£/mile</div>
+          </div>
+          <div class="box">
+            <div class="t">ICE £/mile</div>
+            <div class="v" id="ice_per_mile">—</div>
+            <div class="small">£/mile</div>
           </div>
         </div>
 
@@ -349,14 +477,16 @@
 
   <div id="toast" aria-live="polite"></div>
 
+  <!-- split scripts (order matters) -->
+  <script src="./data.js"></script>
+  <script src="./calc.js"></script>
+  <script src="./ui.js"></script>
   <script src="./app.js"></script>
 
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
-        try {
-          await navigator.serviceWorker.register("./sw.js", { scope: "./" });
-        } catch (e) {}
+        try { await navigator.serviceWorker.register("./sw.js", { scope: "./" }); } catch (e) {}
       });
     }
   </script>
