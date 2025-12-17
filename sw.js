@@ -1,9 +1,12 @@
-const CACHE_NAME = "ev-log-cache-v3";
+const CACHE_NAME = "ev-log-cache-v7";
 
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./data.js",
+  "./calc.js",
+  "./ui.js",
   "./app.js",
   "./manifest.json",
   "./icon-192.png",
