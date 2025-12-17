@@ -220,3 +220,36 @@ summary::-webkit-details-marker{display:none}
   cursor:pointer;
 }
 .toastBtn:hover{border-color:#242424}
+.attCount {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.attList {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 8px;
+}
+
+.attRow {
+  display: grid;
+  grid-template-columns: 1.2fr 2fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.attRow input {
+  width: 100%;
+}
+
+.attLink {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.9em;
+  opacity: 0.9;
+  word-break: break-all;
+}
+
