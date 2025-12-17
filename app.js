@@ -1,480 +1,71 @@
+/* app.js - main UI wiring + render */
 (() => {
+  const D = window.EVData;
+  const C = window.EVCalc;
+  const U = window.EVUI;
+
   const $ = (id) => document.getElementById(id);
 
-  // ---------- Storage ----------
-  const STORAGE_KEY = "ev_log_final_v1";
-  const LEGACY_KEYS = [
-    "ev_log_tabs_v3_edit_filter_same",
-    "ev_log_tabs_v2_savedcol",
-    "ev_log_tabs_v1",
-    "ev_log_v3_stacked_prices_ice",
-    "ev_log_v2_payback",
-    "ev_log_v1"
-  ];
-
-  // ---------- Edit drafts ----------
+  // Edit drafts
   let editingId = null;
   const editDrafts = new Map();
 
-  // ---------- Filter ----------
+  let costEditingId = null;
+  const costEditDrafts = new Map();
+
+  // Filters
   let currentFilter = localStorage.getItem("ev_month_filter") || "all"; // all | this | last
-  const uiFilter = {
-    search: "",
-    type: "all",
-    from: "",
-    to: ""
-  };
+  const uiFilter = { search: "", type: "all", from: "", to: "" };
 
-  // ---------- Undo delete ----------
+  // Undo
+  let lastDeleted = null;
   let undoTimer = null;
-  let lastDeleted = null; // { entry, index }
 
-  // ---------- Toast ----------
-  let toastTimer = null;
-  function toast(text, kind=""){
-    const el = $("toast");
-    if (!el) return;
-
-    el.innerHTML = `<div class="toastRow"><div>${escapeHtml(text || "")}</div></div>`;
-    el.className = "";
-    if (kind) el.classList.add(kind);
-    el.classList.add("show");
-
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=> hideToast(), 1800);
-  }
-
-  function toastUndo(text, onUndo){
-    const el = $("toast");
-    if (!el) return;
-
-    el.innerHTML = `
-      <div class="toastRow">
-        <div>${escapeHtml(text || "")}</div>
-        <div class="toastActions">
-          <button class="toastBtn" id="toastUndoBtn" type="button">Undo</button>
-          <button class="toastBtn" id="toastDismissBtn" type="button">Dismiss</button>
-        </div>
-      </div>
-    `;
-    el.className = "";
-    el.classList.add("show");
-
-    const u = $("toastUndoBtn");
-    const d = $("toastDismissBtn");
-    u?.addEventListener("click", () => { hideToast(); onUndo?.(); });
-    d?.addEventListener("click", () => hideToast());
-
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=> hideToast(), 5000);
-  }
-
-  function hideToast(){
-    const el = $("toast");
-    if (!el) return;
-    el.classList.remove("show");
-    setTimeout(()=>{ el.innerHTML=""; el.className=""; }, 220);
-  }
-
-  // ---------- Utils ----------
-  function nowISODate(){
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,"0");
-    const day = String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
-  }
-  function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
-  function fmtGBP(x, decimals=2){ return "£" + (Number.isFinite(x) ? x.toFixed(decimals) : "0.00"); }
-  function fmt(x, decimals=1){ return (Number.isFinite(x) ? x.toFixed(decimals) : "0.0"); }
-  function escapeHtml(s){
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
-  function genId(){
-    return (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
-  }
-  function typeLabel(t){
-    if (t === "public") return "Публично";
-    if (t === "public_exp") return "Публично скъпо";
-    if (t === "home") return "Домашно";
-    if (t === "home_exp") return "Домашно скъпо";
-    return "Друга";
-  }
-  function normalizeEntryType(t){
-    if (t === "home_cheap") return "home";
-    if (t === "public") return "public";
-    if (t === "public_exp") return "public_exp";
-    if (t === "home_exp") return "home_exp";
-    return t || "custom";
-  }
-  function monthKeyFromISO(iso){
-    return (typeof iso === "string" && iso.length >= 7) ? iso.slice(0,7) : "unknown";
-  }
-  function thisMonthKey(){
-    return nowISODate().slice(0,7);
-  }
-  function lastMonthKey(){
-    const [y, m] = thisMonthKey().split("-").map(n => parseInt(n,10));
-    const mm = m - 1;
-    if (mm >= 1) return `${y}-${String(mm).padStart(2,"0")}`;
-    return `${y-1}-12`;
-  }
-
-  // ---------- State schema ----------
-  function defaultState(){
-    return {
-      schema: 1,
-      prices: { public: 0.56, public_exp: 0.76, home: 0.09, home_exp: 0.30 },
-      investment: { charger: 700, install: 300 },
-      compare: { ice_mpg: 45, ev_mpkwh: 3, fuel_price: 1.50 },
-      entries: []
-    };
-  }
-
-  function sanitizeEntry(e){
-    if (!e || typeof e !== "object") return null;
-    const date = (typeof e.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date)) ? e.date : nowISODate();
-    const type = normalizeEntryType(e.type);
-    const price = num(e.price);
-    const kwh = num(e.kwh);
-    const note = (typeof e.note === "string") ? e.note.trim() : "";
-    const id = (typeof e.id === "string" && e.id.length >= 6) ? e.id : genId();
-    const createdAt = (typeof e.createdAt === "string" && e.createdAt.length >= 10) ? e.createdAt : new Date().toISOString();
-    if (!(kwh >= 0) || !(price >= 0)) return null;
-    return { id, date, type, price, kwh, note, createdAt };
-  }
-
-  function stableEntrySort(a,b){
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-    const ac = a.createdAt || "";
-    const bc = b.createdAt || "";
-    if (ac !== bc) return ac.localeCompare(bc);
-    return (a.id||"").localeCompare(b.id||"");
-  }
-
-  function sanitizeState(obj){
-    const st = defaultState();
-    const o = (obj && typeof obj === "object") ? obj : {};
-
-    const p = o.prices && typeof o.prices === "object" ? o.prices : {};
-    st.prices.public = num(p.public ?? p.publicPrice ?? st.prices.public);
-    st.prices.public_exp = num(p.public_exp ?? p.publicExp ?? st.prices.public_exp);
-    st.prices.home = num(p.home ?? p.cheap ?? p.homeCheap ?? st.prices.home);
-    st.prices.home_exp = num(p.home_exp ?? p.exp ?? p.homeExpensive ?? st.prices.home_exp);
-
-    const inv = o.investment && typeof o.investment === "object" ? o.investment : {};
-    st.investment.charger = num(inv.charger ?? st.investment.charger);
-    st.investment.install = num(inv.install ?? st.investment.install);
-
-    const c = o.compare && typeof o.compare === "object" ? o.compare : {};
-    st.compare.ice_mpg = num(c.ice_mpg ?? st.compare.ice_mpg) || st.compare.ice_mpg;
-    st.compare.ev_mpkwh = num(c.ev_mpkwh ?? st.compare.ev_mpkwh) || st.compare.ev_mpkwh;
-    st.compare.fuel_price = num(c.fuel_price ?? st.compare.fuel_price);
-
-    const arr = Array.isArray(o.entries) ? o.entries : [];
-    st.entries = arr.map(e => sanitizeEntry(e)).filter(Boolean);
-    st.entries.sort(stableEntrySort);
-
-    return st;
-  }
-
-  function loadState(){
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw){
-      try{ return sanitizeState(JSON.parse(raw)); }catch(e){}
-    }
-    for (const key of LEGACY_KEYS){
-      const legacyRaw = localStorage.getItem(key);
-      if (!legacyRaw) continue;
-      try{
-        const legacy = JSON.parse(legacyRaw);
-        const st = sanitizeState(legacy);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
-        return st;
-      }catch(e){}
-    }
-    return defaultState();
-  }
-
-  function saveState(state){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
-
-  // ---------- Math ----------
-  function calcTotalsForEntries(state, entries){
-    const basePublic = num(state.prices.public);
-    let kwh = 0, cost = 0, saved = 0, publicCost = 0;
-
-    const byType = {};
-    for (const e of entries){
-      const ek = num(e.kwh);
-      const ep = num(e.price);
-      const ec = ek * ep;
-
-      kwh += ek;
-      cost += ec;
-
-      const t = e.type || "custom";
-      if (!byType[t]) byType[t] = { kwh:0, cost:0, count:0 };
-      byType[t].kwh += ek;
-      byType[t].cost += ec;
-      byType[t].count++;
-
-      const isPublic = (t === "public" || t === "public_exp");
-      if (isPublic) publicCost += ec;
-      if (!isPublic) saved += (basePublic - ep) * ek;
-    }
-
-    return { kwh, cost, saved, publicCost, byType, basePublic };
-  }
-
-  function breakdownText(totals){
-    const order = ["public","public_exp","home","home_exp","custom"];
-    const parts = [];
-    for (const t of order){
-      if (!totals.byType[t]) continue;
-      const b = totals.byType[t];
-      parts.push(`${typeLabel(t)}: ${fmt(b.kwh,1)} kWh, ${fmtGBP(b.cost,2)} (${b.count})`);
-    }
-    return parts.length
-      ? (parts.join(" • ") + ` • base public ${fmtGBP(totals.basePublic,3)}/kWh`)
-      : "Няма записи.";
-  }
-
-  // ---------- Filters ----------
-  function passesFilters(e){
-    const s = (uiFilter.search || "").trim().toLowerCase();
-    if (s){
-      const note = (e.note || "").toLowerCase();
-      if (!note.includes(s)) return false;
-    }
-    if (uiFilter.type && uiFilter.type !== "all"){
-      if ((e.type || "custom") !== uiFilter.type) return false;
-    }
-    if (uiFilter.from){
-      if (e.date < uiFilter.from) return false;
-    }
-    if (uiFilter.to){
-      if (e.date > uiFilter.to) return false;
-    }
-    return true;
-  }
-
-  function applyMonthFilter(entries){
-    if (currentFilter === "all") return entries;
-    const thisKey = thisMonthKey();
-    const lastKey = lastMonthKey();
-    return entries.filter(e => {
-      const k = monthKeyFromISO(e.date);
-      return currentFilter === "this" ? k === thisKey : k === lastKey;
-    });
-  }
-
-  function applyAllFilters(entries){
-    const a = applyMonthFilter(entries);
-    return a.filter(passesFilters);
-  }
-
-  // ---------- Edit drafts ----------
-  function startEdit(entry){
-    editingId = entry.id;
-    editDrafts.set(entry.id, {
-      type: entry.type,
-      kwh: num(entry.kwh),
-      price: num(entry.price),
-      note: entry.note || ""
-    });
-  }
-  function cancelEdit(){
-    if (editingId) editDrafts.delete(editingId);
-    editingId = null;
-  }
-  function saveEdit(state){
-    const id = editingId;
-    const d = id ? editDrafts.get(id) : null;
-    if (!id || !d) return;
-
-    const idx = state.entries.findIndex(e => e.id === id);
-    if (idx >= 0){
-      state.entries[idx] = { ...state.entries[idx], ...d };
-      state.entries = state.entries.map(sanitizeEntry).filter(Boolean);
-      state.entries.sort(stableEntrySort);
-    }
-
-    editDrafts.delete(id);
-    editingId = null;
-
-    saveState(state);
-    render(state);
-    toast("Saved ✅", "good");
-  }
-
-  // ---------- UI helpers ----------
-  function syncInputs(state){
+  function syncInputs(state) {
     $("p_public").value = state.prices.public;
     $("p_public_exp").value = state.prices.public_exp;
     $("p_home").value = state.prices.home;
     $("p_home_exp").value = state.prices.home_exp;
-
     $("charger_cost").value = state.investment.charger;
     $("install_cost").value = state.investment.install;
 
     $("ice_mpg").value = state.compare.ice_mpg;
     $("ev_mpkwh").value = state.compare.ev_mpkwh;
     $("fuel_price").value = state.compare.fuel_price;
+    $("ice_maint_per_mile").value = state.compare.ice_maint_per_mile;
 
     $("monthFilter").value = currentFilter;
   }
 
-  function readInputsToState(state){
-    state.prices.public = num($("p_public").value);
-    state.prices.public_exp = num($("p_public_exp").value);
-    state.prices.home = num($("p_home").value);
-    state.prices.home_exp = num($("p_home_exp").value);
+  function readInputsToState(state) {
+    state.prices.public = D.num($("p_public").value);
+    state.prices.public_exp = D.num($("p_public_exp").value);
+    state.prices.home = D.num($("p_home").value);
+    state.prices.home_exp = D.num($("p_home_exp").value);
+    state.investment.charger = D.num($("charger_cost").value);
+    state.investment.install = D.num($("install_cost").value);
 
-    state.investment.charger = num($("charger_cost").value);
-    state.investment.install = num($("install_cost").value);
-
-    state.compare.ice_mpg = Math.max(0.1, num($("ice_mpg").value) || 45);
-    state.compare.ev_mpkwh = Math.max(0.1, num($("ev_mpkwh").value) || 3);
-    state.compare.fuel_price = Math.max(0, num($("fuel_price").value));
+    state.compare.ice_mpg = Math.max(0.1, D.num($("ice_mpg").value) || 45);
+    state.compare.ev_mpkwh = Math.max(0.1, D.num($("ev_mpkwh").value) || 3);
+    state.compare.fuel_price = Math.max(0, D.num($("fuel_price").value));
+    state.compare.ice_maint_per_mile = Math.max(0, D.num($("ice_maint_per_mile").value));
   }
 
-  function currentPriceForType(state, t){
-    if (t === "public") return num(state.prices.public);
-    if (t === "public_exp") return num(state.prices.public_exp);
-    if (t === "home") return num(state.prices.home);
-    if (t === "home_exp") return num(state.prices.home_exp);
+  function currentPriceForType(state, t) {
+    if (t === "public") return D.num(state.prices.public);
+    if (t === "public_exp") return D.num(state.prices.public_exp);
+    if (t === "home") return D.num(state.prices.home);
+    if (t === "home_exp") return D.num(state.prices.home_exp);
     return 0;
   }
 
-  function autoFillEntryPrice(state){
+  function autoFillEntryPrice(state) {
     const t = $("e_type").value;
     if (t === "custom") return;
     $("e_price").value = currentPriceForType(state, t).toFixed(3);
   }
 
-  // Quick type buttons
-  function setTypeQuick(state, type){
-    $("e_type").value = type;
-    autoFillEntryPrice(state);
-    $("e_kwh").focus();
-  }
-
-  // Last kWh buttons (render only when Quick is opened)
-  function buildLastKwhButtons(state){
-    const host = $("lastKwhBtns");
-    if (!host) return;
-    host.innerHTML = "";
-
-    const sorted = [...state.entries].sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
-    const uniq = [];
-    for (const e of sorted){
-      const k = num(e.kwh);
-      if (!(k > 0)) continue;
-      const key = k.toFixed(1);
-      if (!uniq.includes(key)) uniq.push(key);
-      if (uniq.length >= 3) break;
-    }
-
-    if (!uniq.length){
-      const span = document.createElement("span");
-      span.className = "small";
-      span.textContent = "— (няма още записи)";
-      host.appendChild(span);
-      return;
-    }
-
-    uniq.forEach(kStr => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill";
-      btn.textContent = kStr;
-      btn.onclick = () => {
-        $("e_kwh").value = kStr;
-        $("e_kwh").focus();
-      };
-      host.appendChild(btn);
-    });
-  }
-
-  // ---------- Actions ----------
-  function addEntry(state){
-    cancelEdit();
-
-    const date = $("e_date").value || nowISODate();
-    const kwh = num($("e_kwh").value);
-    const type = $("e_type").value;
-    const price = num($("e_price").value);
-    const note = ($("e_note").value || "").trim();
-
-    if (!(kwh > 0)) { toast("Въведи kWh", "bad"); return; }
-    if (!(price >= 0)) { toast("Въведи цена", "bad"); return; }
-
-    const entry = sanitizeEntry({
-      id: genId(),
-      date,
-      type,
-      price,
-      kwh,
-      note,
-      createdAt: new Date().toISOString()
-    });
-
-    state.entries.push(entry);
-    state.entries.sort(stableEntrySort);
-    saveState(state);
-    render(state);
-
-    $("e_kwh").value = "";
-    $("e_note").value = "";
-    $("e_date").value = date;
-    if (type !== "custom") autoFillEntryPrice(state);
-
-    $("e_kwh").focus();
-    toast("Добавено ✅", "good");
-  }
-
-  function deleteEntry(state, id){
-    cancelEdit();
-
-    const idx = state.entries.findIndex(e => e.id === id);
-    if (idx < 0) return;
-
-    const removed = state.entries[idx];
-    state.entries.splice(idx, 1);
-    saveState(state);
-    render(state);
-
-    // store undo info
-    lastDeleted = { entry: removed, index: idx };
-    if (undoTimer) clearTimeout(undoTimer);
-    undoTimer = setTimeout(() => { lastDeleted = null; }, 5000);
-
-    toastUndo("Deleted. Undo?", () => undoDelete(state));
-  }
-
-  function undoDelete(state){
-    if (!lastDeleted) return;
-    const { entry, index } = lastDeleted;
-
-    // insert back near original position
-    const safeIndex = Math.min(Math.max(index, 0), state.entries.length);
-    state.entries.splice(safeIndex, 0, entry);
-    state.entries.sort(stableEntrySort);
-
-    lastDeleted = null;
-    saveState(state);
-    render(state);
-    toast("Restored ✅", "good");
-  }
-
-  function latestEntry(entries){
+  function latestEntry(entries) {
     if (!entries.length) return null;
     return entries.reduce((best, e) => {
       const b = best?.createdAt ? Date.parse(best.createdAt) : Date.parse((best?.date || "1970-01-01") + "T00:00:00Z");
@@ -483,43 +74,276 @@
     }, entries[0]);
   }
 
-  function applySameAsLast(state){
-    cancelEdit();
-    const last = latestEntry(state.entries);
-    if (!last){
-      toast("Няма предишен запис", "bad");
+  function buildLastKwhButtons(state) {
+    const host = $("lastKwhBtns");
+    if (!host) return;
+    host.innerHTML = "";
+    const sorted = [...state.entries].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    const uniq = [];
+    for (const e of sorted) {
+      const k = D.num(e.kwh);
+      if (!(k > 0)) continue;
+      const key = k.toFixed(1);
+      if (!uniq.includes(key)) uniq.push(key);
+      if (uniq.length >= 3) break;
+    }
+    if (!uniq.length) {
+      const span = document.createElement("span");
+      span.className = "small";
+      span.textContent = "— (няма още записи)";
+      host.appendChild(span);
       return;
     }
-    $("e_date").value = nowISODate();
-    $("e_type").value = last.type || "custom";
-    $("e_price").value = num(last.price).toFixed(3);
-    $("e_kwh").value = num(last.kwh) ? String(num(last.kwh)) : "";
-    $("e_note").value = last.note || "";
-    $("e_kwh").focus();
-    toast("Попълнено ✅", "good");
+    uniq.forEach(kStr => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill";
+      btn.textContent = kStr;
+      btn.onclick = () => { $("e_kwh").value = kStr; $("e_kwh").focus(); };
+      host.appendChild(btn);
+    });
   }
 
-  function duplicateEntry(state, entry){
-    cancelEdit();
-    const copy = sanitizeEntry({
-      id: genId(),
-      date: nowISODate(),
+  // ---- Edit drafts ----
+  function startEdit(entry) {
+    editingId = entry.id;
+    editDrafts.set(entry.id, {
       type: entry.type,
-      price: num(entry.price),
-      kwh: num(entry.kwh),
+      kwh: D.num(entry.kwh),
+      price: D.num(entry.price),
       note: entry.note || "",
+      attachments: D.sanitizeAttachments(entry.attachments)
+    });
+  }
+  function cancelEdit() {
+    if (editingId) editDrafts.delete(editingId);
+    editingId = null;
+  }
+  function saveEdit(state) {
+    const id = editingId;
+    const d = id ? editDrafts.get(id) : null;
+    if (!id || !d) return;
+    const idx = state.entries.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      state.entries[idx] = { ...state.entries[idx], ...d };
+      state.entries = state.entries.map(D.sanitizeEntry).filter(Boolean).sort(D.stableSortByDateCreated);
+    }
+    editDrafts.delete(id);
+    editingId = null;
+    D.saveState(state);
+    render(state);
+    U.toast("Saved ✅", "good");
+  }
+
+  function startCostEdit(cost) {
+    costEditingId = cost.id;
+    costEditDrafts.set(cost.id, {
+      date: cost.date,
+      vehicle: cost.vehicle,
+      category: cost.category,
+      amount: D.num(cost.amount),
+      spread: cost.spread || "oneoff",
+      miles: cost.miles ?? "",
+      note: cost.note || "",
+      attachments: D.sanitizeAttachments(cost.attachments)
+    });
+  }
+  function cancelCostEdit() {
+    if (costEditingId) costEditDrafts.delete(costEditingId);
+    costEditingId = null;
+  }
+  function saveCostEdit(state) {
+    const id = costEditingId;
+    const d = id ? costEditDrafts.get(id) : null;
+    if (!id || !d) return;
+    const idx = state.costs.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      state.costs[idx] = D.sanitizeCost({ ...state.costs[idx], ...d });
+      state.costs = state.costs.filter(Boolean).sort(D.stableSortByDateCreated);
+    }
+    costEditDrafts.delete(id);
+    costEditingId = null;
+    D.saveState(state);
+    render(state);
+    U.toast("Cost saved ✅", "good");
+  }
+
+  // ---- CRUD entries ----
+  function addEntry(state) {
+    cancelEdit(); cancelCostEdit();
+
+    const date = $("e_date").value || D.nowISODate();
+    const kwh = D.num($("e_kwh").value);
+    const type = $("e_type").value;
+    const price = D.num($("e_price").value);
+    const note = ($("e_note").value || "").trim();
+
+    if (!(kwh > 0)) { U.toast("Въведи kWh", "bad"); return; }
+    if (!(price >= 0)) { U.toast("Въведи цена", "bad"); return; }
+
+    const entry = D.sanitizeEntry({
+      id: D.genId(), date, type, price, kwh, note,
+      attachments: [],
+      createdAt: new Date().toISOString()
+    });
+    state.entries.push(entry);
+    state.entries.sort(D.stableSortByDateCreated);
+    D.saveState(state);
+    render(state);
+
+    $("e_kwh").value = "";
+    $("e_note").value = "";
+    $("e_date").value = date;
+    if (type !== "custom") autoFillEntryPrice(state);
+    $("e_kwh").focus();
+    U.toast("Добавено ✅", "good");
+  }
+
+  function applySameAsLast(state) {
+    cancelEdit();
+    const last = latestEntry(state.entries);
+    if (!last) { U.toast("Няма предишен запис", "bad"); return; }
+    $("e_date").value = D.nowISODate();
+    $("e_type").value = last.type || "custom";
+    $("e_price").value = D.num(last.price).toFixed(3);
+    $("e_kwh").value = D.num(last.kwh) ? String(D.num(last.kwh)) : "";
+    $("e_note").value = last.note || "";
+    $("e_kwh").focus();
+    U.toast("Попълнено ✅", "good");
+  }
+
+  function duplicateEntry(state, entry) {
+    cancelEdit();
+    const copy = D.sanitizeEntry({
+      id: D.genId(),
+      date: D.nowISODate(),
+      type: entry.type,
+      price: D.num(entry.price),
+      kwh: D.num(entry.kwh),
+      note: entry.note || "",
+      attachments: D.sanitizeAttachments(entry.attachments),
+      createdAt: new Date().toISOString()
+    });
+    state.entries.push(copy);
+    state.entries.sort(D.stableSortByDateCreated);
+    D.saveState(state);
+    render(state);
+    U.toast("Copied ✅", "good");
+  }
+
+  function deleteCharging(state, id) {
+    cancelEdit();
+    const idx = state.entries.findIndex(e => e.id === id);
+    if (idx < 0) return;
+    const removed = state.entries[idx];
+    state.entries.splice(idx, 1);
+    D.saveState(state);
+    render(state);
+
+    lastDeleted = { kind: "charge", item: removed, index: idx };
+    if (undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { lastDeleted = null; }, 5000);
+    U.toastUndo("Deleted. Undo?", () => undoDelete(state));
+  }
+
+  // ---- CRUD costs ----
+  function addCost(state) {
+    cancelEdit(); cancelCostEdit();
+
+    const date = $("c_date").value || D.nowISODate();
+    const vehicle = $("c_vehicle").value || "ev";
+    const category = $("c_cat").value || "other";
+    const amount = D.num($("c_amount").value);
+    const miles = ($("c_miles").value || "").trim();
+    const note = ($("c_note").value || "").trim();
+    const spread = $("c_spread_default").value || "oneoff";
+
+    if (!(amount > 0)) { U.toast("Въведи сума (£)", "bad"); return; }
+
+    const cost = D.sanitizeCost({
+      id: D.genId(),
+      date, vehicle, category, amount, spread, miles, note,
+      attachments: [],
       createdAt: new Date().toISOString()
     });
 
-    state.entries.push(copy);
-    state.entries.sort(stableEntrySort);
-    saveState(state);
+    state.costs.push(cost);
+    state.costs.sort(D.stableSortByDateCreated);
+    D.saveState(state);
     render(state);
-    toast("Copied ✅", "good");
+
+    $("c_amount").value = "";
+    $("c_miles").value = "";
+    $("c_note").value = "";
+    $("c_date").value = date;
+    $("c_amount").focus();
+    U.toast("Cost added ✅", "good");
   }
 
-  // ---------- Export/Import ----------
-  function downloadText(filename, text){
+  function duplicateCost(state, cost) {
+    cancelCostEdit();
+    const copy = D.sanitizeCost({
+      id: D.genId(),
+      date: D.nowISODate(),
+      vehicle: cost.vehicle,
+      category: cost.category,
+      amount: D.num(cost.amount),
+      spread: cost.spread || "oneoff",
+      miles: cost.miles ?? "",
+      note: cost.note || "",
+      attachments: D.sanitizeAttachments(cost.attachments),
+      createdAt: new Date().toISOString()
+    });
+    state.costs.push(copy);
+    state.costs.sort(D.stableSortByDateCreated);
+    D.saveState(state);
+    render(state);
+    U.toast("Cost copied ✅", "good");
+  }
+
+  function deleteCost(state, id) {
+    cancelCostEdit();
+    const idx = state.costs.findIndex(c => c.id === id);
+    if (idx < 0) return;
+    const removed = state.costs[idx];
+    state.costs.splice(idx, 1);
+    D.saveState(state);
+    render(state);
+
+    lastDeleted = { kind: "cost", item: removed, index: idx };
+    if (undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { lastDeleted = null; }, 5000);
+    U.toastUndo("Cost deleted. Undo?", () => undoDelete(state));
+  }
+
+  // ---- Undo ----
+  function undoDelete(state) {
+    if (!lastDeleted) return;
+    const { kind, item, index } = lastDeleted;
+    lastDeleted = null;
+
+    if (kind === "charge") {
+      const i = Math.min(Math.max(index, 0), state.entries.length);
+      state.entries.splice(i, 0, item);
+      state.entries.sort(D.stableSortByDateCreated);
+      D.saveState(state);
+      render(state);
+      U.toast("Restored ✅", "good");
+      return;
+    }
+    if (kind === "cost") {
+      const i = Math.min(Math.max(index, 0), state.costs.length);
+      state.costs.splice(i, 0, item);
+      state.costs.sort(D.stableSortByDateCreated);
+      D.saveState(state);
+      render(state);
+      U.toast("Cost restored ✅", "good");
+      return;
+    }
+  }
+
+  // ---- Export/CSV/Backup ----
+  function downloadText(filename, text) {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -530,169 +354,161 @@
     a.remove();
     URL.revokeObjectURL(url);
   }
-
-  function exportJSON(state){
-    const payload = JSON.stringify(state, null, 2);
-    if (navigator.clipboard?.writeText){
-      navigator.clipboard.writeText(payload)
-        .then(()=> toast("Export copied ✅", "good"))
-        .catch(()=> { downloadText(`ev_export_${nowISODate()}.json`, payload); toast("Clipboard fail → file ✅","good"); });
-    } else {
-      downloadText(`ev_export_${nowISODate()}.json`, payload);
-      toast("Export file ✅", "good");
-    }
-  }
-
-  function importJSONPrompt(){
-    cancelEdit();
-    const raw = prompt("Paste JSON (замества текущите данни):");
-    if (!raw) return null;
-    try{
-      const parsed = JSON.parse(raw);
-      const newState = sanitizeState(parsed);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-      toast("Import OK ✅", "good");
-      return newState;
-    }catch(e){
-      toast("Invalid JSON ❌", "bad");
-      return null;
-    }
-  }
-
-  function csvEscape(v){
+  function csvEscape(v) {
     const s = String(v ?? "");
     if (/[",\n]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
     return s;
   }
-
-  function csvFromEntries(state, entries){
-    const basePublic = num(state.prices.public);
-    const header = ["Date","Type","kWh","Price_per_kWh","Cost_GBP","Saved_vs_BasePublic_GBP","Note"];
+  function attachmentsToCSV(atts) {
+    const arr = D.sanitizeAttachments(atts);
+    return arr.map(a => `${(a.name || "").replaceAll("|", "/")}|${a.url || ""}`).join(" ; ");
+  }
+  function csvFromEntries(state, entries) {
+    const basePublic = D.num(state.prices.public);
+    const header = ["Date","Type","kWh","Price_per_kWh","Cost_GBP","Saved_vs_BasePublic_GBP","Note","AttachmentCount","Attachments"];
     const rows = entries.map(e => {
-      const k = num(e.kwh);
-      const p = num(e.price);
+      const k = D.num(e.kwh);
+      const p = D.num(e.price);
       const cost = k * p;
       const isPublic = (e.type === "public" || e.type === "public_exp");
       const saved = !isPublic ? (basePublic - p) * k : 0;
+      const atts = D.sanitizeAttachments(e.attachments);
       return [
-        e.date,
-        e.type,
-        k.toFixed(1),
-        p.toFixed(3),
-        cost.toFixed(2),
-        saved.toFixed(2),
-        e.note || ""
+        e.date, e.type, k.toFixed(1), p.toFixed(3),
+        cost.toFixed(2), saved.toFixed(2),
+        e.note || "",
+        String(atts.length),
+        attachmentsToCSV(atts)
       ];
     });
-
-    return [header, ...rows]
-      .map(r => r.map(csvEscape).join(","))
-      .join("\n");
+    return [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\n");
+  }
+  function exportCSVAll(state) {
+    downloadText(`ev_log_${D.nowISODate()}_all.csv`, csvFromEntries(state, state.entries));
+    U.toast("CSV downloaded ✅", "good");
+  }
+  function exportCSVThisMonth(state) {
+    const key = C.thisMonthKey();
+    const entries = state.entries.filter(e => C.monthKeyFromISO(e.date) === key);
+    downloadText(`ev_log_${D.nowISODate()}_this_month.csv`, csvFromEntries(state, entries));
+    U.toast("CSV (this month) ✅", "good");
+  }
+  function exportCostsCSV(state) {
+    const header = ["Date","Vehicle","Category","Amount_GBP","Spread","Mileage","Note","AttachmentCount","Attachments"];
+    const rows = state.costs.map(c => {
+      const atts = D.sanitizeAttachments(c.attachments);
+      return [
+        c.date,
+        c.vehicle,
+        c.category,
+        D.num(c.amount).toFixed(2),
+        c.spread || "oneoff",
+        c.miles ?? "",
+        c.note || "",
+        String(atts.length),
+        attachmentsToCSV(atts)
+      ];
+    });
+    const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\n");
+    downloadText(`ev_costs_${D.nowISODate()}.csv`, csv);
+    U.toast("Costs CSV ✅", "good");
   }
 
-  function exportCSVAll(state){
-    cancelEdit();
-    const csv = csvFromEntries(state, state.entries);
-    downloadText(`ev_log_${nowISODate()}_all.csv`, csv);
-    toast("CSV downloaded ✅", "good");
+  function exportJSON(state) {
+    const payload = JSON.stringify(state, null, 2);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(payload)
+        .then(() => U.toast("Export copied ✅", "good"))
+        .catch(() => { downloadText(`ev_export_${D.nowISODate()}.json`, payload); U.toast("Clipboard fail → file ✅", "good"); });
+    } else {
+      downloadText(`ev_export_${D.nowISODate()}.json`, payload);
+      U.toast("Export file ✅", "good");
+    }
   }
 
-  function exportCSVThisMonth(state){
-    cancelEdit();
-    const key = thisMonthKey();
-    const entries = state.entries.filter(e => monthKeyFromISO(e.date) === key);
-    const csv = csvFromEntries(state, entries);
-    downloadText(`ev_log_${nowISODate()}_this_month.csv`, csv);
-    toast("CSV (this month) ✅", "good");
+  function importJSONPrompt() {
+    cancelEdit(); cancelCostEdit();
+    const raw = prompt("Paste JSON (замества текущите данни):");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const newState = D.sanitizeState(parsed);
+      D.saveState(newState);
+      U.toast("Import OK ✅", "good");
+      return newState;
+    } catch (e) {
+      U.toast("Invalid JSON ❌", "bad");
+      return null;
+    }
   }
 
-  function downloadJSONFile(state){
-    cancelEdit();
-    const filename = `ev_backup_${nowISODate()}.json`;
-    const text = JSON.stringify(state, null, 2);
-    downloadText(filename, text);
-
+  function downloadJSONFile(state) {
+    downloadText(`ev_backup_${D.nowISODate()}.json`, JSON.stringify(state, null, 2));
     localStorage.setItem("ev_last_backup", new Date().toISOString());
     render(state);
-
-    toast("Backup file ✅", "good");
+    U.toast("Backup file ✅", "good");
   }
 
-  function restoreFromJSONText(text){
-    cancelEdit();
+  function restoreFromJSONText(text) {
     const parsed = JSON.parse(text);
-    const newState = sanitizeState(parsed);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+    const newState = D.sanitizeState(parsed);
+    D.saveState(newState);
     localStorage.setItem("ev_last_backup", new Date().toISOString());
-    toast("Restore OK ✅", "good");
+    U.toast("Restore OK ✅", "good");
     return newState;
   }
 
-  function restoreJSONFile(stateSetter){
+  function restoreJSONFile(stateSetter) {
     const input = $("restoreFileInput");
     input.value = "";
     input.click();
-
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-
-      try{
+      try {
         const text = await file.text();
-        const newState = restoreFromJSONText(text);
-        stateSetter(newState);
-      }catch(e){
-        toast("Restore failed ❌", "bad");
+        stateSetter(restoreFromJSONText(text));
+      } catch (e) {
+        U.toast("Restore failed ❌", "bad");
       }
     };
   }
 
-  // ---------- Compare ----------
-  function compareTotals(state, totalsAll){
-    const iceMPG = Math.max(0.1, num(state.compare.ice_mpg));
-    const evMPKWh = Math.max(0.1, num(state.compare.ev_mpkwh));
-    const fuelPrice = Math.max(0, num(state.compare.fuel_price));
-
-    const estMiles = totalsAll.kwh * evMPKWh;
-    const ukGallons = estMiles / iceMPG;
-    const liters = ukGallons * 4.54609;
-    const iceCost = liters * fuelPrice;
-    const diff = iceCost - totalsAll.cost;
-
-    return { estMiles, iceCost, diff };
-  }
-
-  // ---------- Monthly summary ----------
-  function monthlyLine(label, totals){
-    return `${label}: ${fmt(totals.kwh,1)} kWh · ${fmtGBP(totals.cost,2)} · saved ${fmtGBP(totals.saved,2)}`;
-  }
-
-  async function copyText(text){
-    try{
-      await navigator.clipboard.writeText(text);
-      toast("Copied ✅","good");
-    } catch {
-      downloadText(`ev_summary_${nowISODate()}.txt`, text);
-      toast("Clipboard failed → file ✅","good");
+  // ---- Render ----
+  function breakdownText(totals) {
+    const order = ["public","public_exp","home","home_exp","custom"];
+    const parts = [];
+    for (const t of order) {
+      if (!totals.byType[t]) continue;
+      const b = totals.byType[t];
+      parts.push(`${U.typeLabel(t)}: ${C.fmt(b.kwh,1)} kWh, ${C.fmtGBP(b.cost,2)} (${b.count})`);
     }
+    return parts.length ? (parts.join(" • ") + ` • base public ${C.fmtGBP(totals.basePublic,3)}/kWh`) : "Няма записи.";
   }
 
-  // ---------- Render ----------
-  function render(state){
-    const totalsAll = calcTotalsForEntries(state, state.entries);
+  function render(state) {
+    const entriesPeriod = C.applyMonthFilterEntries(state.entries, currentFilter);
+    const costsPeriod = C.applyMonthFilterCosts(state.costs, currentFilter);
 
-    $("tot_kwh").textContent = fmt(totalsAll.kwh, 1);
-    $("tot_cost").textContent = fmtGBP(totalsAll.cost, 2);
-    $("public_cost").textContent = fmtGBP(totalsAll.publicCost, 2);
-    $("saved_vs_public").textContent = fmtGBP(totalsAll.saved, 2);
+    const totalsPeriod = C.calcTotalsForEntries(state, entriesPeriod);
+    const totalsAll = C.calcTotalsForEntries(state, state.entries);
 
-    const investment = num(state.investment.charger) + num(state.investment.install);
-    $("inv_total").textContent = fmtGBP(investment, 0);
+    $("tot_kwh").textContent = C.fmt(totalsAll.kwh, 1);
+    $("tot_cost").textContent = C.fmtGBP(totalsAll.cost, 2);
+    $("public_cost").textContent = C.fmtGBP(totalsAll.publicCost, 2);
+    $("saved_vs_public").textContent = C.fmtGBP(totalsAll.saved, 2);
 
+    const evCostsPeriod = C.calcCostsTotals(costsPeriod, currentFilter, "ev").total;
+    const iceCostsPeriod = C.calcCostsTotals(costsPeriod, currentFilter, "ice").total;
+    $("ev_costs_period").textContent = C.fmtGBP(evCostsPeriod, 2);
+    $("ice_costs_period").textContent = C.fmtGBP(iceCostsPeriod, 2);
+
+    const investment = D.num(state.investment.charger) + D.num(state.investment.install);
+    $("inv_total").textContent = C.fmtGBP(investment, 0);
     const remain = investment + totalsAll.publicCost - totalsAll.saved;
     const remainEl = $("remain_payback");
-    remainEl.textContent = fmtGBP(remain, 2);
-    if (remain <= 0){
+    remainEl.textContent = C.fmtGBP(remain, 2);
+    if (remain <= 0) {
       remainEl.className = "v good";
       $("remain_note").textContent = "✅ Изплатено/надминато";
     } else {
@@ -700,47 +516,57 @@
       $("remain_note").textContent = "Инвестиция + публични − спестено";
     }
 
-    const cmp = compareTotals(state, totalsAll);
-    $("est_miles").textContent = cmp.estMiles.toFixed(0);
-    $("ice_cost").textContent = fmtGBP(cmp.iceCost, 2);
-    $("ev_cost_for_miles").textContent = fmtGBP(totalsAll.cost, 2);
-    const diffEl = $("ice_vs_ev_diff");
-    diffEl.textContent = fmtGBP(cmp.diff, 2);
-    diffEl.className = "v " + (cmp.diff >= 0 ? "good" : "bad");
-
-    const bAll = breakdownText(totalsAll);
-    $("breakdown_log").textContent = bAll;
-    $("breakdown_summary").textContent = bAll;
-    $("breakdown_compare").textContent = bAll;
-
-    const thisKey = thisMonthKey();
-    const lastKey = lastMonthKey();
-    const thisEntries = state.entries.filter(e => monthKeyFromISO(e.date) === thisKey);
-    const lastEntries = state.entries.filter(e => monthKeyFromISO(e.date) === lastKey);
-    const thisTotals = calcTotalsForEntries(state, thisEntries);
-    const lastTotals = calcTotalsForEntries(state, lastEntries);
+    const thisKey = C.thisMonthKey();
+    const lastKey = C.lastMonthKey();
+    const thisEntries = state.entries.filter(e => C.monthKeyFromISO(e.date) === thisKey);
+    const lastEntries = state.entries.filter(e => C.monthKeyFromISO(e.date) === lastKey);
+    const thisTotals = C.calcTotalsForEntries(state, thisEntries);
+    const lastTotals = C.calcTotalsForEntries(state, lastEntries);
 
     const monthLineEl = $("monthLine");
     monthLineEl.textContent = thisTotals.kwh || thisTotals.cost || thisTotals.saved
-      ? `This month: ${fmt(thisTotals.kwh,1)} kWh · ${fmtGBP(thisTotals.cost,2)} · Saved ${fmtGBP(thisTotals.saved,2)}`
+      ? `This month: ${C.fmt(thisTotals.kwh,1)} kWh · ${C.fmtGBP(thisTotals.cost,2)} · Saved ${C.fmtGBP(thisTotals.saved,2)}`
       : "";
     monthLineEl.style.display = monthLineEl.textContent ? "block" : "none";
 
     const lastMonthLineEl = $("lastMonthLine");
     lastMonthLineEl.textContent = lastTotals.kwh || lastTotals.cost || lastTotals.saved
-      ? `Last month: ${fmt(lastTotals.kwh,1)} kWh · ${fmtGBP(lastTotals.cost,2)} · Saved ${fmtGBP(lastTotals.saved,2)}`
+      ? `Last month: ${C.fmt(lastTotals.kwh,1)} kWh · ${C.fmtGBP(lastTotals.cost,2)} · Saved ${C.fmtGBP(lastTotals.saved,2)}`
       : "";
     lastMonthLineEl.style.display = lastMonthLineEl.textContent ? "block" : "none";
 
-    $("m_this_line").textContent = `${fmt(thisTotals.kwh,1)} kWh`;
-    $("m_this_sub").textContent = `${fmtGBP(thisTotals.cost,2)} · saved ${fmtGBP(thisTotals.saved,2)}`;
-    $("m_last_line").textContent = `${fmt(lastTotals.kwh,1)} kWh`;
-    $("m_last_sub").textContent = `${fmtGBP(lastTotals.cost,2)} · saved ${fmtGBP(lastTotals.saved,2)}`;
+    $("m_this_line").textContent = `${C.fmt(thisTotals.kwh,1)} kWh`;
+    $("m_this_sub").textContent = `${C.fmtGBP(thisTotals.cost,2)} · saved ${C.fmtGBP(thisTotals.saved,2)}`;
+    $("m_last_line").textContent = `${C.fmt(lastTotals.kwh,1)} kWh`;
+    $("m_last_sub").textContent = `${C.fmtGBP(lastTotals.cost,2)} · saved ${C.fmtGBP(lastTotals.saved,2)}`;
+
+    $("breakdown_log").textContent = breakdownText(totalsAll);
+    $("breakdown_summary").textContent = breakdownText(totalsAll);
+
+    const cmp = C.compareRealistic(state, totalsPeriod, costsPeriod, currentFilter);
+    $("est_miles").textContent = cmp.miles.toFixed(0);
+    $("ev_total_real").textContent = C.fmtGBP(cmp.evTotal, 2);
+    $("ice_total_real").textContent = C.fmtGBP(cmp.iceTotal, 2);
+
+    const diffEl = $("ice_vs_ev_diff");
+    diffEl.textContent = C.fmtGBP(cmp.diff, 2);
+    diffEl.className = "v " + (cmp.diff >= 0 ? "good" : "bad");
+
+    $("ev_per_mile").textContent = cmp.miles > 0 ? (cmp.evPerMile.toFixed(3)) : "0.000";
+    $("ice_per_mile").textContent = cmp.miles > 0 ? (cmp.icePerMile.toFixed(3)) : "0.000";
+
+    const label = (currentFilter === "all" ? "All" : (currentFilter === "this" ? "This month" : "Last month"));
+    $("breakdown_compare").textContent = [
+      `Period: ${label}`,
+      `Miles (est): ${cmp.miles.toFixed(0)} (from ${C.fmt(totalsPeriod.kwh,1)} kWh @ ${D.num(state.compare.ev_mpkwh).toFixed(1)} mi/kWh)`,
+      `EV: charging ${C.fmtGBP(totalsPeriod.cost,2)} + EV costs ${C.fmtGBP(cmp.evCosts,2)} = ${C.fmtGBP(cmp.evTotal,2)}`,
+      `ICE: fuel ${C.fmtGBP(cmp.fuelCost,2)} (${cmp.liters.toFixed(1)} L) + maint ${C.fmtGBP(cmp.iceMaint,2)} ${cmp.hasIceCosts ? "(from ICE costs)" : "(fallback £/mile)"} = ${C.fmtGBP(cmp.iceTotal,2)}`
+    ].join(" • ");
 
     const lb = localStorage.getItem("ev_last_backup");
     const lbEl = $("lastBackupLine");
-    if (lbEl){
-      if (lb){
+    if (lbEl) {
+      if (lb) {
         const d = new Date(lb);
         lbEl.textContent = `Last backup: ${d.toLocaleString()}`;
         lbEl.style.display = "block";
@@ -750,39 +576,37 @@
       }
     }
 
-    const visibleEntries = applyAllFilters(state.entries);
-    const totalsVisible = calcTotalsForEntries(state, visibleEntries);
+    // --- Charging table ---
+    const visibleEntries = C.applyAllEntryFilters(state, currentFilter, uiFilter);
+    const totalsVisible = C.calcTotalsForEntries(state, visibleEntries);
 
     const tbody = $("tbody");
     tbody.innerHTML = "";
 
-    const basePublic = totalsAll.basePublic;
-
-    for (const e of visibleEntries){
+    for (const e of visibleEntries) {
       const isEditing = (editingId === e.id);
       const d = isEditing ? editDrafts.get(e.id) : null;
 
       const viewType = isEditing ? d.type : e.type;
-      const viewKwh  = isEditing ? d.kwh  : num(e.kwh);
-      const viewPrice= isEditing ? d.price: num(e.price);
+      const viewKwh = isEditing ? d.kwh : D.num(e.kwh);
+      const viewPrice = isEditing ? d.price : D.num(e.price);
       const viewNote = isEditing ? d.note : (e.note || "");
+      const viewAtts = isEditing ? d.attachments : D.sanitizeAttachments(e.attachments);
 
       const cost = viewKwh * viewPrice;
       const isPublic = (viewType === "public" || viewType === "public_exp");
-      const saved = !isPublic ? (basePublic - viewPrice) * viewKwh : 0;
+      const saved = !isPublic ? (totalsAll.basePublic - viewPrice) * viewKwh : 0;
 
       const tr = document.createElement("tr");
 
-      const tdDate = document.createElement("td");
-      tdDate.textContent = e.date;
+      const tdDate = document.createElement("td"); tdDate.textContent = e.date;
 
       const tdType = document.createElement("td");
-      if (isEditing){
+      if (isEditing) {
         const sel = document.createElement("select");
-        ["public","public_exp","home","home_exp","custom"].forEach(t=>{
+        ["public","public_exp","home","home_exp","custom"].forEach(t => {
           const o = document.createElement("option");
-          o.value = t;
-          o.textContent = typeLabel(t);
+          o.value = t; o.textContent = U.typeLabel(t);
           if (t === viewType) o.selected = true;
           sel.appendChild(o);
         });
@@ -795,65 +619,64 @@
         noteInp.oninput = () => { d.note = noteInp.value; };
         noteInp.style.marginTop = "6px";
         tdType.appendChild(noteInp);
+
+        const det = document.createElement("details");
+        det.style.marginTop = "8px";
+        const sum = document.createElement("summary");
+        sum.textContent = `Attachments ${U.attCountText(viewAtts) || ""}`.trim();
+        det.appendChild(sum);
+        det.appendChild(U.buildAttachmentsEditor(d));
+        tdType.appendChild(det);
+
       } else {
+        const attTxt = U.attCountText(viewAtts);
         tdType.innerHTML =
-          `<span class="tag">${typeLabel(viewType)}</span>` +
-          (viewNote ? `<span class="note">${escapeHtml(viewNote)}</span>` : "");
+          `<span class="tag">${U.typeLabel(viewType)}</span>` +
+          (viewNote
+            ? `<span class="note">${U.escapeHtml(viewNote)}${attTxt ? `<span class="attCount"> ${attTxt}</span>` : ""}</span>`
+            : (attTxt ? `<span class="note"><span class="attCount">${attTxt}</span></span>` : "")
+          );
       }
 
       const tdKwh = document.createElement("td");
-      if (isEditing){
+      if (isEditing) {
         const inp = document.createElement("input");
-        inp.type = "number";
-        inp.step = "0.1";
-        inp.value = viewKwh;
-        inp.oninput = () => { d.kwh = num(inp.value); };
+        inp.type = "number"; inp.step = "0.1"; inp.value = viewKwh;
+        inp.oninput = () => { d.kwh = D.num(inp.value); };
         tdKwh.appendChild(inp);
-      } else {
-        tdKwh.textContent = fmt(viewKwh, 1);
-      }
+      } else tdKwh.textContent = C.fmt(viewKwh, 1);
 
       const tdPrice = document.createElement("td");
-      if (isEditing){
+      if (isEditing) {
         const inp = document.createElement("input");
-        inp.type = "number";
-        inp.step = "0.001";
-        inp.value = viewPrice;
-        inp.oninput = () => { d.price = num(inp.value); };
+        inp.type = "number"; inp.step = "0.001"; inp.value = viewPrice;
+        inp.oninput = () => { d.price = D.num(inp.value); };
         tdPrice.appendChild(inp);
-      } else {
-        tdPrice.textContent = viewPrice.toFixed(3);
-      }
+      } else tdPrice.textContent = viewPrice.toFixed(3);
 
-      const tdCost = document.createElement("td");
-      tdCost.textContent = fmtGBP(cost, 2);
+      const tdCost = document.createElement("td"); tdCost.textContent = C.fmtGBP(cost, 2);
 
       const tdSaved = document.createElement("td");
-      tdSaved.textContent = fmtGBP(saved, 2);
+      tdSaved.textContent = C.fmtGBP(saved, 2);
       if (saved > 0) tdSaved.className = "good";
       if (saved < 0) tdSaved.className = "bad";
 
-      // Row menu (single column)
       const tdMenu = document.createElement("td");
       const menu = document.createElement("details");
       menu.className = "rowMenu";
-      const sum = document.createElement("summary");
-      sum.textContent = "⋯";
-      menu.appendChild(sum);
+      const sumMenu = document.createElement("summary");
+      sumMenu.textContent = "⋯";
+      menu.appendChild(sumMenu);
 
       const box = document.createElement("div");
       box.className = "rowMenuBox";
 
       const btnCopy = document.createElement("button");
-      btnCopy.className = "mini";
-      btnCopy.type = "button";
-      btnCopy.textContent = "Copy";
+      btnCopy.className = "mini"; btnCopy.type = "button"; btnCopy.textContent = "Copy";
       btnCopy.onclick = () => { menu.open = false; duplicateEntry(state, e); };
 
       const btnEdit = document.createElement("button");
-      btnEdit.className = "mini";
-      btnEdit.type = "button";
-      btnEdit.textContent = isEditing ? "Save" : "Edit";
+      btnEdit.className = "mini"; btnEdit.type = "button"; btnEdit.textContent = isEditing ? "Save" : "Edit";
       btnEdit.onclick = () => {
         menu.open = false;
         if (isEditing) saveEdit(state);
@@ -861,19 +684,14 @@
       };
 
       const btnDel = document.createElement("button");
-      btnDel.className = "mini";
-      btnDel.type = "button";
-      btnDel.textContent = isEditing ? "Cancel" : "Del";
+      btnDel.className = "mini"; btnDel.type = "button"; btnDel.textContent = isEditing ? "Cancel" : "Del";
       btnDel.onclick = () => {
         menu.open = false;
-        if (isEditing){ cancelEdit(); render(state); }
-        else deleteEntry(state, e.id);
+        if (isEditing) { cancelEdit(); render(state); }
+        else deleteCharging(state, e.id);
       };
 
-      box.appendChild(btnCopy);
-      box.appendChild(btnEdit);
-      box.appendChild(btnDel);
-
+      box.appendChild(btnCopy); box.appendChild(btnEdit); box.appendChild(btnDel);
       menu.appendChild(box);
       tdMenu.appendChild(menu);
 
@@ -890,214 +708,313 @@
 
     const tfoot = $("tfoot");
     tfoot.innerHTML = "";
-    const label = (currentFilter === "all" ? "All" : (currentFilter === "this" ? "This month" : "Last month"));
     const trf = document.createElement("tr");
     trf.innerHTML = `
       <th colspan="2">TOTAL (${label})</th>
-      <th>${fmt(totalsVisible.kwh,1)}</th>
+      <th>${C.fmt(totalsVisible.kwh,1)}</th>
       <th></th>
-      <th>${fmtGBP(totalsVisible.cost,2)}</th>
-      <th>${fmtGBP(totalsVisible.saved,2)}</th>
+      <th>${C.fmtGBP(totalsVisible.cost,2)}</th>
+      <th>${C.fmtGBP(totalsVisible.saved,2)}</th>
       <th></th>
     `;
     tfoot.appendChild(trf);
 
+    // --- Costs table ---
+    const evT = C.calcCostsTotals(costsPeriod, currentFilter, "ev");
+    const iceT = C.calcCostsTotals(costsPeriod, currentFilter, "ice");
+    $("costsTotalsLine").textContent =
+      `Period: ${label} • EV ${C.fmtGBP(evT.total,2)} • ICE ${C.fmtGBP(iceT.total,2)} • Total ${C.fmtGBP(evT.total + iceT.total,2)} (spread applied)`;
+
+    const costsTbody = $("costsTbody");
+    costsTbody.innerHTML = "";
+
+    for (const c of state.costs) {
+      const isEditing = (costEditingId === c.id);
+      const d = isEditing ? costEditDrafts.get(c.id) : null;
+
+      const vDate = isEditing ? d.date : c.date;
+      const vVeh = isEditing ? d.vehicle : c.vehicle;
+      const vCat = isEditing ? d.category : c.category;
+      const vAmt = isEditing ? D.num(d.amount) : D.num(c.amount);
+      const vSpr = isEditing ? d.spread : (c.spread || "oneoff");
+      const vMiles = isEditing ? (d.miles ?? "") : (c.miles ?? "");
+      const vNote = isEditing ? (d.note ?? "") : (c.note || "");
+      const vAtts = isEditing ? d.attachments : D.sanitizeAttachments(c.attachments);
+
+      const tr = document.createElement("tr");
+
+      const tdDate = document.createElement("td");
+      if (isEditing) {
+        const inp = document.createElement("input");
+        inp.type = "date"; inp.value = vDate;
+        inp.oninput = () => { d.date = inp.value; };
+        tdDate.appendChild(inp);
+      } else tdDate.textContent = vDate;
+
+      const tdCat = document.createElement("td");
+      if (isEditing) {
+        const vehSel = document.createElement("select");
+        ["ev","ice"].forEach(v => {
+          const o = document.createElement("option");
+          o.value = v; o.textContent = U.vehicleLabel(v);
+          if (v === vVeh) o.selected = true;
+          vehSel.appendChild(o);
+        });
+        vehSel.onchange = () => { d.vehicle = vehSel.value; };
+
+        const catSel = document.createElement("select");
+        ["tyres","brakes","service","mot","insurance","tax","repairs","accessories","other"].forEach(k => {
+          const o = document.createElement("option");
+          o.value = k; o.textContent = U.costCatLabel(k);
+          if (k === vCat) o.selected = true;
+          catSel.appendChild(o);
+        });
+        catSel.onchange = () => { d.category = catSel.value; };
+
+        tdCat.appendChild(vehSel);
+        tdCat.appendChild(document.createElement("div")).className = "divider";
+        tdCat.appendChild(catSel);
+
+      } else {
+        tdCat.innerHTML = `<span class="tag">${U.vehicleLabel(vVeh)} · ${U.costCatLabel(vCat)}</span>`;
+      }
+
+      const tdAmt = document.createElement("td");
+      if (isEditing) {
+        const inp = document.createElement("input");
+        inp.type = "number"; inp.step = "0.01"; inp.value = vAmt;
+        inp.oninput = () => { d.amount = D.num(inp.value); };
+        tdAmt.appendChild(inp);
+      } else tdAmt.textContent = C.fmtGBP(vAmt, 2);
+
+      const tdSpread = document.createElement("td");
+      if (isEditing) {
+        const sel = document.createElement("select");
+        ["oneoff","monthly","yearly"].forEach(s => {
+          const o = document.createElement("option");
+          o.value = s; o.textContent = U.spreadLabel(s);
+          if (s === vSpr) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.onchange = () => { d.spread = sel.value; };
+        tdSpread.appendChild(sel);
+      } else tdSpread.textContent = U.spreadLabel(vSpr);
+
+      const tdMiles = document.createElement("td");
+      if (isEditing) {
+        const inp = document.createElement("input");
+        inp.type = "number"; inp.step = "1"; inp.value = vMiles;
+        inp.oninput = () => { d.miles = inp.value; };
+        tdMiles.appendChild(inp);
+      } else tdMiles.textContent = vMiles || "";
+
+      const tdNote = document.createElement("td");
+      if (isEditing) {
+        const inp = document.createElement("input");
+        inp.type = "text"; inp.value = vNote;
+        inp.oninput = () => { d.note = inp.value; };
+        tdNote.appendChild(inp);
+
+        const det = document.createElement("details");
+        det.style.marginTop = "8px";
+        const sum = document.createElement("summary");
+        sum.textContent = `Attachments ${U.attCountText(vAtts) || ""}`.trim();
+        det.appendChild(sum);
+        det.appendChild(U.buildAttachmentsEditor(d));
+        tdNote.appendChild(det);
+
+      } else {
+        const attTxt = U.attCountText(vAtts);
+        tdNote.innerHTML = `${U.escapeHtml(vNote)}${attTxt ? `<span class="attCount"> ${attTxt}</span>` : ""}`;
+      }
+
+      const tdMenu = document.createElement("td");
+      const menu = document.createElement("details");
+      menu.className = "rowMenu";
+      const sumMenu = document.createElement("summary");
+      sumMenu.textContent = "⋯";
+      menu.appendChild(sumMenu);
+
+      const box = document.createElement("div");
+      box.className = "rowMenuBox";
+
+      const btnCopy = document.createElement("button");
+      btnCopy.className = "mini"; btnCopy.type = "button"; btnCopy.textContent = "Copy";
+      btnCopy.onclick = () => { menu.open = false; duplicateCost(state, c); };
+
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "mini"; btnEdit.type = "button"; btnEdit.textContent = isEditing ? "Save" : "Edit";
+      btnEdit.onclick = () => {
+        menu.open = false;
+        if (isEditing) saveCostEdit(state);
+        else { cancelCostEdit(); startCostEdit(c); render(state); }
+      };
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "mini"; btnDel.type = "button"; btnDel.textContent = isEditing ? "Cancel" : "Del";
+      btnDel.onclick = () => {
+        menu.open = false;
+        if (isEditing) { cancelCostEdit(); render(state); }
+        else deleteCost(state, c.id);
+      };
+
+      box.appendChild(btnCopy); box.appendChild(btnEdit); box.appendChild(btnDel);
+      menu.appendChild(box);
+      tdMenu.appendChild(menu);
+
+      tr.appendChild(tdDate);
+      tr.appendChild(tdCat);
+      tr.appendChild(tdAmt);
+      tr.appendChild(tdSpread);
+      tr.appendChild(tdMiles);
+      tr.appendChild(tdNote);
+      tr.appendChild(tdMenu);
+
+      costsTbody.appendChild(tr);
+    }
+
+    const costsTfoot = $("costsTfoot");
+    costsTfoot.innerHTML = "";
+    const trc = document.createElement("tr");
+    trc.innerHTML = `
+      <th colspan="2">TOTAL (period)</th>
+      <th>${C.fmtGBP(evT.total + iceT.total,2)}</th>
+      <th colspan="4"></th>
+    `;
+    costsTfoot.appendChild(trc);
+
+    if ($("quickPanel")?.open) buildLastKwhButtons(state);
     syncInputs(state);
   }
 
-  // ---------- Tabs ----------
-  function wireTabs(){
+  // ---- Tabs ----
+  function wireTabs() {
     const buttons = Array.from(document.querySelectorAll(".tabbtn"));
-    function activate(tabName){
+    function activate(tabName) {
       buttons.forEach(b => b.classList.toggle("active", b.dataset.tab === tabName));
       document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
       const target = document.getElementById("tab-" + tabName);
       if (target) target.classList.add("active");
       localStorage.setItem("ev_last_tab", tabName);
     }
-    buttons.forEach(btn => btn.addEventListener("click", ()=> activate(btn.dataset.tab)));
+    buttons.forEach(btn => btn.addEventListener("click", () => activate(btn.dataset.tab)));
     const last = localStorage.getItem("ev_last_tab");
     if (last) activate(last);
   }
 
-  // ---------- Wire ----------
-  function wire(){
-    let state = loadState();
+  // ---- Main wire ----
+  function wire() {
+    let state = D.loadState();
 
-    $("e_date").value = nowISODate();
+    $("e_date").value = D.nowISODate();
+    $("c_date").value = D.nowISODate();
+
     syncInputs(state);
     autoFillEntryPrice(state);
     render(state);
 
-    // Quick panel: collapsed by default, remember state
     const quickPanel = $("quickPanel");
-    if (quickPanel){
+    if (quickPanel) {
       quickPanel.open = (localStorage.getItem("ev_quick_open") === "1");
-      if (quickPanel.open) buildLastKwhButtons(state);
-
       quickPanel.addEventListener("toggle", () => {
         localStorage.setItem("ev_quick_open", quickPanel.open ? "1" : "0");
-        if (quickPanel.open) buildLastKwhButtons(state);
       });
     }
+    $("filterPanel").open = false;
 
-    // Filters panel: collapsed by default
-    const filterPanel = $("filterPanel");
-    if (filterPanel){
-      filterPanel.open = false;
-    }
-
-    // Prices/investment/compare inputs
-    [
-      "p_public","p_public_exp","p_home","p_home_exp",
-      "charger_cost","install_cost",
-      "ice_mpg","ev_mpkwh","fuel_price"
-    ].forEach(id=>{
-      $(id).addEventListener("input", ()=>{
-        cancelEdit();
-        readInputsToState(state);
-        saveState(state);
-        autoFillEntryPrice(state);
-        render(state);
+    ["p_public","p_public_exp","p_home","p_home_exp","charger_cost","install_cost","ice_mpg","ev_mpkwh","fuel_price","ice_maint_per_mile"]
+      .forEach(id => {
+        $(id).addEventListener("input", () => {
+          cancelEdit(); cancelCostEdit();
+          readInputsToState(state);
+          D.saveState(state);
+          autoFillEntryPrice(state);
+          render(state);
+        });
       });
-    });
 
-    $("e_type").addEventListener("change", ()=> autoFillEntryPrice(state));
+    $("e_type").addEventListener("change", () => autoFillEntryPrice(state));
 
-    // Quick type buttons
-    $("qt_public").addEventListener("click", ()=> setTypeQuick(state, "public"));
-    $("qt_public_exp").addEventListener("click", ()=> setTypeQuick(state, "public_exp"));
-    $("qt_home").addEventListener("click", ()=> setTypeQuick(state, "home"));
-    $("qt_home_exp").addEventListener("click", ()=> setTypeQuick(state, "home_exp"));
+    $("qt_public").addEventListener("click", () => { $("e_type").value = "public"; autoFillEntryPrice(state); $("e_kwh").focus(); });
+    $("qt_public_exp").addEventListener("click", () => { $("e_type").value = "public_exp"; autoFillEntryPrice(state); $("e_kwh").focus(); });
+    $("qt_home").addEventListener("click", () => { $("e_type").value = "home"; autoFillEntryPrice(state); $("e_kwh").focus(); });
+    $("qt_home_exp").addEventListener("click", () => { $("e_type").value = "home_exp"; autoFillEntryPrice(state); $("e_kwh").focus(); });
 
-    // Core actions
-    $("addBtn").addEventListener("click", ()=> addEntry(state));
-    $("sameBtn").addEventListener("click", ()=> applySameAsLast(state));
+    $("addBtn").addEventListener("click", () => addEntry(state));
+    $("sameBtn").addEventListener("click", () => applySameAsLast(state));
 
-    // More menu actions
-    $("exportBtn").addEventListener("click", ()=> exportJSON(state));
-    $("csvBtn").addEventListener("click", ()=> exportCSVAll(state));
-    $("csvThisMonthBtn").addEventListener("click", ()=> exportCSVThisMonth(state));
+    $("c_addBtn").addEventListener("click", () => addCost(state));
+    $("c_csvBtn").addEventListener("click", () => exportCostsCSV(state));
 
-    $("backupFileBtn").addEventListener("click", ()=> downloadJSONFile(state));
-    $("restoreFileBtn").addEventListener("click", ()=>{
-      restoreJSONFile((newState)=>{
-        state = newState;
-        cancelEdit();
-        render(state);
-        autoFillEntryPrice(state);
-        syncInputs(state);
-        if ($("quickPanel")?.open) buildLastKwhButtons(state);
-      });
-    });
-
-    $("importBtn").addEventListener("click", ()=>{
-      const newState = importJSONPrompt();
-      if (newState){
-        state = newState;
-        cancelEdit();
-        render(state);
-        autoFillEntryPrice(state);
-        syncInputs(state);
-        if ($("quickPanel")?.open) buildLastKwhButtons(state);
-      }
-    });
-
-    $("clearBtn").addEventListener("click", ()=>{
-      if (!confirm("Да изтрия всичко?")) return;
-      cancelEdit();
-      state.entries = [];
-      saveState(state);
-      render(state);
-      toast("Cleared ✅", "good");
-    });
-
-    // Month filter
-    $("monthFilter").addEventListener("change", (e)=>{
-      currentFilter = e.target.value;
-      localStorage.setItem("ev_month_filter", currentFilter);
-      cancelEdit();
-      render(state);
-    });
-
-    // Filters UI
-    $("toggleFiltersBtn").addEventListener("click", ()=>{
+    $("toggleFiltersBtn").addEventListener("click", () => {
       const fp = $("filterPanel");
       fp.open = !fp.open;
-      // scroll to it a bit for clarity
       if (fp.open) fp.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    const fSearch = $("f_search");
-    const fType = $("f_type");
-    const fFrom = $("f_from");
-    const fTo = $("f_to");
-
-    function onFilterChange(){
-      uiFilter.search = fSearch.value || "";
-      uiFilter.type = fType.value || "all";
-      uiFilter.from = fFrom.value || "";
-      uiFilter.to = fTo.value || "";
+    function onFilterChange() {
+      uiFilter.search = $("f_search").value || "";
+      uiFilter.type = $("f_type").value || "all";
+      uiFilter.from = $("f_from").value || "";
+      uiFilter.to = $("f_to").value || "";
       cancelEdit();
       render(state);
     }
-
-    [fSearch, fType, fFrom, fTo].forEach(el => el.addEventListener("input", onFilterChange));
-
-    $("clearFiltersBtn").addEventListener("click", ()=>{
-      fSearch.value = "";
-      fType.value = "all";
-      fFrom.value = "";
-      fTo.value = "";
+    ["f_search","f_type","f_from","f_to"].forEach(id => $(id).addEventListener("input", onFilterChange));
+    $("clearFiltersBtn").addEventListener("click", () => {
+      $("f_search").value = "";
+      $("f_type").value = "all";
+      $("f_from").value = "";
+      $("f_to").value = "";
       onFilterChange();
-      toast("Filters cleared ✅","good");
+      U.toast("Filters cleared ✅", "good");
     });
 
-    // Copy monthly summary
-    $("copyMonthlyBtn")?.addEventListener("click", ()=>{
-      const thisKey = thisMonthKey();
-      const lastKey = lastMonthKey();
-      const thisEntries = state.entries.filter(e => monthKeyFromISO(e.date) === thisKey);
-      const lastEntries = state.entries.filter(e => monthKeyFromISO(e.date) === lastKey);
-      const tThis = calcTotalsForEntries(state, thisEntries);
-      const tLast = calcTotalsForEntries(state, lastEntries);
+    $("exportBtn").addEventListener("click", () => exportJSON(state));
+    $("csvBtn").addEventListener("click", () => exportCSVAll(state));
+    $("csvThisMonthBtn").addEventListener("click", () => exportCSVThisMonth(state));
 
-      const allTotals = calcTotalsForEntries(state, state.entries);
-      const inv = num(state.investment.charger) + num(state.investment.install);
-      const remain = inv + allTotals.publicCost - allTotals.saved;
-
-      const lines = [
-        "EV Log — monthly summary",
-        monthlyLine("This month", tThis),
-        monthlyLine("Last month", tLast),
-        `Investment: ${fmtGBP(inv,0)}`,
-        `Payback remaining: ${fmtGBP(remain,2)}`
-      ].join("\n");
-
-      copyText(lines);
+    $("backupFileBtn").addEventListener("click", () => downloadJSONFile(state));
+    $("restoreFileBtn").addEventListener("click", () => {
+      restoreJSONFile((newState) => {
+        state = newState;
+        cancelEdit(); cancelCostEdit();
+        render(state);
+        autoFillEntryPrice(state);
+        syncInputs(state);
+      });
     });
 
-    // Fast keyboard flow (Enter)
-    $("e_date").addEventListener("keydown", (ev)=>{
-      if (ev.key !== "Enter") return;
-      ev.preventDefault();
-      $("e_kwh").focus();
+    $("importBtn").addEventListener("click", () => {
+      const newState = importJSONPrompt();
+      if (newState) {
+        state = newState;
+        cancelEdit(); cancelCostEdit();
+        render(state);
+        autoFillEntryPrice(state);
+        syncInputs(state);
+      }
     });
-    $("e_kwh").addEventListener("keydown", (ev)=>{
-      if (ev.key !== "Enter") return;
-      ev.preventDefault();
-      $("e_price").focus();
+
+    $("clearBtn").addEventListener("click", () => {
+      if (!confirm("Да изтрия всичко?")) return;
+      cancelEdit(); cancelCostEdit();
+      state.entries = [];
+      state.costs = [];
+      D.saveState(state);
+      render(state);
+      U.toast("Cleared ✅", "good");
     });
-    $("e_price").addEventListener("keydown", (ev)=>{
-      if (ev.key !== "Enter") return;
-      ev.preventDefault();
-      $("e_note").focus();
+
+    $("monthFilter").addEventListener("change", (e) => {
+      currentFilter = e.target.value;
+      localStorage.setItem("ev_month_filter", currentFilter);
+      cancelEdit(); cancelCostEdit();
+      render(state);
     });
-    $("e_note").addEventListener("keydown", (ev)=>{
-      if (ev.key !== "Enter") return;
-      ev.preventDefault();
-      addEntry(state);
-    });
+
+    $("e_note").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addEntry(state); } });
+    $("c_note").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addCost(state); } });
 
     wireTabs();
   }
