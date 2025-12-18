@@ -82,7 +82,7 @@
     return { total, byCat };
   }
 
-  // ---- Search includes note + attachments (Option 1) ----
+  // ---- Search includes note + attachments ----
   function entryMatchesSearch(e, searchLower) {
     if (!searchLower) return true;
     const note = (e.note || "").toLowerCase();
