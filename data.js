@@ -147,7 +147,6 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  // expose
   window.EVData = {
     STORAGE_KEY,
     LEGACY_KEYS,
