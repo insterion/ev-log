@@ -9,29 +9,34 @@
       .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   }
 
-  // Labels
+  // Labels (с леки иконки)
   function typeLabel(t) {
-    if (t === "public") return "Публично";
-    if (t === "public_exp") return "Публично скъпо";
-    if (t === "home") return "Домашно";
-    if (t === "home_exp") return "Домашно скъпо";
-    return "Друга";
+    if (t === "public") return "⚡ Публично";
+    if (t === "public_exp") return "⚡⬆ Публично скъпо";
+    if (t === "home") return "🏠⚡ Домашно";
+    if (t === "home_exp") return "🏠⚡⬆ Домашно скъпо";
+    return "⚙ Друга";
   }
+
   function costCatLabel(c) {
     const m = {
-      tyres: "Tyres",
-      brakes: "Brakes",
-      service: "Service",
-      mot: "MOT",
-      insurance: "Insurance",
-      tax: "Tax",
-      repairs: "Repairs",
-      accessories: "Accessories",
+      tyres: "Tyres 🛞",
+      brakes: "Brakes 🛑",
+      service: "Service 🛠",
+      mot: "MOT 📋",
+      insurance: "Insurance 📄",
+      tax: "Tax 💰",
+      repairs: "Repairs 🔧",
+      accessories: "Accessories 🎛",
       other: "Other"
     };
     return m[c] || "Other";
   }
-  function vehicleLabel(v) { return (v === "ice") ? "ICE" : "EV"; }
+
+  function vehicleLabel(v) {
+    return (v === "ice") ? "🛢 ICE" : "🔋 EV";
+  }
+
   function spreadLabel(s) {
     if (s === "monthly") return "Monthly";
     if (s === "yearly") return "Yearly";
