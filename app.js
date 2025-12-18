@@ -51,12 +51,23 @@
     state.compare.ice_maint_per_mile = Math.max(0, D.num($("ice_maint_per_mile").value));
   }
 
+  // smart default price
   function currentPriceForType(state, t) {
-    if (t === "public") return D.num(state.prices.public);
-    if (t === "public_exp") return D.num(state.prices.public_exp);
-    if (t === "home") return D.num(state.prices.home);
-    if (t === "home_exp") return D.num(state.prices.home_exp);
-    return 0;
+    let base = 0;
+    if (t === "public") base = D.num(state.prices.public);
+    else if (t === "public_exp") base = D.num(state.prices.public_exp);
+    else if (t === "home") base = D.num(state.prices.home);
+    else if (t === "home_exp") base = D.num(state.prices.home_exp);
+    else base = 0;
+
+    // последната реална цена за този тип
+    for (let i = state.entries.length - 1; i >= 0; i--) {
+      const e = state.entries[i];
+      if (e.type === t && D.num(e.price) > 0) {
+        return D.num(e.price);
+      }
+    }
+    return base;
   }
 
   function autoFillEntryPrice(state) {
@@ -102,6 +113,17 @@
       btn.onclick = () => { $("e_kwh").value = kStr; $("e_kwh").focus(); };
       host.appendChild(btn);
     });
+  }
+
+  // scroll + highlight new row
+  function highlightAndScrollToRow(id) {
+    const row = document.querySelector(`tbody tr[data-id="${id}"]`);
+    if (!row) return;
+    row.classList.add("row-new");
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => {
+      row.classList.remove("row-new");
+    }, 1200);
   }
 
   // ---- Edit drafts ----
@@ -191,12 +213,14 @@
     D.saveState(state);
     render(state);
 
+    highlightAndScrollToRow(entry.id);
+
     $("e_kwh").value = "";
     $("e_note").value = "";
     $("e_date").value = date;
     if (type !== "custom") autoFillEntryPrice(state);
     $("e_kwh").focus();
-    U.toast("Добавено ✅", "good");
+    U.toast("Added ✅", "good");
   }
 
   function applySameAsLast(state) {
@@ -228,6 +252,7 @@
     state.entries.sort(D.stableSortByDateCreated);
     D.saveState(state);
     render(state);
+    highlightAndScrollToRow(copy.id);
     U.toast("Copied ✅", "good");
   }
 
@@ -598,6 +623,8 @@
       const saved = !isPublic ? (totalsAll.basePublic - viewPrice) * viewKwh : 0;
 
       const tr = document.createElement("tr");
+      tr.dataset.id = e.id;
+      tr.classList.add("row-type-" + (viewType || "custom"));
 
       const tdDate = document.createElement("td"); tdDate.textContent = e.date;
 
@@ -631,7 +658,7 @@
       } else {
         const attTxt = U.attCountText(viewAtts);
         tdType.innerHTML =
-          `<span class="tag">${U.typeLabel(viewType)}</span>` +
+          `<span class="tag">${U.escapeHtml(U.typeLabel(viewType))}</span>` +
           (viewNote
             ? `<span class="note">${U.escapeHtml(viewNote)}${attTxt ? `<span class="attCount"> ${attTxt}</span>` : ""}</span>`
             : (attTxt ? `<span class="note"><span class="attCount">${attTxt}</span></span>` : "")
@@ -725,6 +752,24 @@
     $("costsTotalsLine").textContent =
       `Period: ${label} • EV ${C.fmtGBP(evT.total,2)} • ICE ${C.fmtGBP(iceT.total,2)} • Total ${C.fmtGBP(evT.total + iceT.total,2)} (spread applied)`;
 
+    // Category breakdown
+    const allCostsTotals = C.calcCostsTotals(costsPeriod, currentFilter, null);
+    const catLineEl = $("costsCatsLine");
+    if (catLineEl) {
+      const keys = Object.keys(allCostsTotals.byCat || {});
+      if (keys.length) {
+        const parts = keys.map(k => {
+          const info = allCostsTotals.byCat[k];
+          return `${U.costCatLabel(k)}: ${C.fmtGBP(info.total,2)} (${info.count})`;
+        });
+        catLineEl.textContent = "By category: " + parts.join(" • ");
+        catLineEl.style.display = "block";
+      } else {
+        catLineEl.textContent = "";
+        catLineEl.style.display = "none";
+      }
+    }
+
     const costsTbody = $("costsTbody");
     costsTbody.innerHTML = "";
 
@@ -742,6 +787,7 @@
       const vAtts = isEditing ? d.attachments : D.sanitizeAttachments(c.attachments);
 
       const tr = document.createElement("tr");
+      tr.classList.add("row-cost-" + (vVeh || "ev"));
 
       const tdDate = document.createElement("td");
       if (isEditing) {
@@ -776,7 +822,7 @@
         tdCat.appendChild(catSel);
 
       } else {
-        tdCat.innerHTML = `<span class="tag">${U.vehicleLabel(vVeh)} · ${U.costCatLabel(vCat)}</span>`;
+        tdCat.innerHTML = `<span class="tag">${U.escapeHtml(U.vehicleLabel(vVeh))} · ${U.escapeHtml(U.costCatLabel(vCat))}</span>`;
       }
 
       const tdAmt = document.createElement("td");
