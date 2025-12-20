@@ -45,6 +45,31 @@
     }
   }
 
+  function ensureCostIds(state) {
+    if (!state || !Array.isArray(state.costs)) return;
+    let counter = 0;
+    for (const c of state.costs) {
+      if (!c.id) {
+        let newId = null;
+        try {
+          if (window.crypto && window.crypto.randomUUID) {
+            newId = window.crypto.randomUUID();
+          }
+        } catch (err) {
+          console.warn("crypto.randomUUID not available for costs, fallback id", err);
+        }
+        if (!newId) {
+          newId =
+            "c_" +
+            Date.now().toString(36) +
+            "_" +
+            (counter++).toString(36);
+        }
+        c.id = newId;
+      }
+    }
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -58,8 +83,9 @@
         Object.assign(state.settings, parsed.settings);
       }
 
-      // гарантираме, че всички entries имат id (за Edit/Delete)
+      // гарантираме, че всички entries и costs имат id (за Edit/Delete)
       ensureEntryIds(state);
+      ensureCostIds(state);
 
       // по желание – записваме обратно, за да се запазят id-тата
       try {
