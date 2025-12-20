@@ -150,11 +150,35 @@
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const rows = sorted.map((c) => {
+      const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
+      const idAttr = c.id ? String(c.id) : "";
       return `<tr>
         <td>${fmtDate(c.date)}</td>
         <td><span class="badge">${c.category}</span></td>
         <td>${fmtGBP(c.amount)}</td>
-        <td>${c.note ? c.note.replace(/</g, "&lt;") : ""}</td>
+        <td>${safeNote}</td>
+        <td>
+          <button
+            type="button"
+            class="btn-small"
+            data-action="edit-cost"
+            data-id="${idAttr}"
+            title="Edit this cost"
+            style="padding:2px 6px;font-size:0.8rem;margin-right:4px;"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            class="btn-small"
+            data-action="delete-cost"
+            data-id="${idAttr}"
+            title="Delete this cost"
+            style="padding:2px 8px;font-size:0.8rem;"
+          >
+            ✕
+          </button>
+        </td>
       </tr>`;
     });
 
@@ -185,6 +209,7 @@
             <th>Category</th>
             <th>£</th>
             <th>Note</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -195,6 +220,7 @@
             <td>Total</td>
             <td></td>
             <td>${fmtGBP(total)}</td>
+            <td></td>
             <td></td>
           </tr>
         </tfoot>
