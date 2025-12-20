@@ -52,13 +52,27 @@
             : "Home xp";
 
         const cost = e.kwh * e.price;
+        const safeNote = e.note ? e.note.replace(/</g, "&lt;") : "";
+        const idAttr = e.id ? String(e.id) : "";
 
         return `<tr>
           <td>${fmtDate(e.date)}</td>
           <td>${fmtNum(e.kwh, 1)}</td>
           <td><span class="badge">${typeLabel}</span></td>
           <td>${fmtGBP(cost)}</td>
-          <td>${e.note ? e.note.replace(/</g, "&lt;") : ""}</td>
+          <td>${safeNote}</td>
+          <td>
+            <button
+              type="button"
+              class="btn-small"
+              data-action="delete-entry"
+              data-id="${idAttr}"
+              title="Delete this entry"
+              style="padding:2px 8px;font-size:0.8rem;"
+            >
+              ✕
+            </button>
+          </td>
         </tr>`;
       });
 
@@ -88,6 +102,7 @@
             <th>Type</th>
             <th>£</th>
             <th>Note</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -99,6 +114,7 @@
             <td>${fmtNum(totalKwh, 1)}</td>
             <td></td>
             <td>${fmtGBP(totalCost)}</td>
+            <td></td>
             <td></td>
           </tr>
         </tfoot>
