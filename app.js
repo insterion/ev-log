@@ -38,6 +38,8 @@
     $("p_public_xp").value = state.settings.public_xp;
     $("p_home").value = state.settings.home;
     $("p_home_xp").value = state.settings.home_xp;
+    $("p_hw").value = state.settings.chargerHardware || 0;
+    $("p_install").value = state.settings.chargerInstall || 0;
   }
 
   function saveSettingsFromInputs() {
@@ -46,8 +48,10 @@
     s.public_xp = parseFloat($("p_public_xp").value) || 0;
     s.home = parseFloat($("p_home").value) || 0;
     s.home_xp = parseFloat($("p_home_xp").value) || 0;
+    s.chargerHardware = parseFloat($("p_hw").value) || 0;
+    s.chargerInstall = parseFloat($("p_install").value) || 0;
     D.saveState(state);
-    U.toast("Prices saved", "good");
+    U.toast("Settings saved", "good");
   }
 
   // ---------- helpers ----------
