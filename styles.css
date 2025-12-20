@@ -498,3 +498,15 @@ tbody tr.row-new {
     background-color: transparent;
   }
 }
+#compareChart {
+  width: 100%;
+  max-width: 100%;
+  display: block;
+  margin-top: 4px;
+}
+
+#compareChartNote {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 0.8rem;
+}
