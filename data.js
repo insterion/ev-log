@@ -10,7 +10,9 @@
       public: 0.56,
       public_xp: 0.76,
       home: 0.09,
-      home_xp: 0.30
+      home_xp: 0.30,
+      chargerHardware: 0,
+      chargerInstall: 0
     }
   };
 
