@@ -101,6 +101,35 @@
     const evPerMile = miles > 0 ? evCost / miles : 0;
     const icePerMile = miles > 0 ? iceCost / miles : 0;
 
+    // home charger payoff vs "everything at public rate"
+    const publicRate =
+      settings && typeof settings.public === "number"
+        ? settings.public
+        : 0;
+
+    let allPublicCost = null;
+    let savedVsPublic = null;
+
+    if (publicRate > 0) {
+      allPublicCost = totalKwh * publicRate;
+      savedVsPublic = allPublicCost - evCost;
+    }
+
+    const hw =
+      settings && typeof settings.chargerHardware === "number"
+        ? settings.chargerHardware
+        : 0;
+    const inst =
+      settings && typeof settings.chargerInstall === "number"
+        ? settings.chargerInstall
+        : 0;
+    const chargerInvestment = hw + inst;
+
+    let remainingToRecover = null;
+    if (chargerInvestment > 0 && savedVsPublic !== null) {
+      remainingToRecover = chargerInvestment - savedVsPublic;
+    }
+
     return {
       totalKwh,
       evCost,
@@ -110,7 +139,12 @@
       icePerLitre,
       evMilesPerKwh,
       evPerMile,
-      icePerMile
+      icePerMile,
+      publicRate,
+      allPublicCost,
+      savedVsPublic,
+      chargerInvestment,
+      remainingToRecover
     };
   }
 
