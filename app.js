@@ -111,7 +111,9 @@
     }
 
     const entry = {
-      id: crypto.randomUUID(),
+      id: (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : "e_" + Date.now().toString(36),
       date,
       kwh,
       type,
@@ -153,7 +155,9 @@
     }
 
     const cost = {
-      id: crypto.randomUUID(),
+      id: (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : "c_" + Date.now().toString(36),
       date,
       category,
       amount,
@@ -164,6 +168,41 @@
     D.saveState(state);
     renderAll();
     U.toast("Cost added", "good");
+  }
+
+  // ---------- delete entry ----------
+
+  function handleDeleteEntry(id) {
+    if (!id) {
+      U.toast("Missing entry id", "bad");
+      return;
+    }
+    const idx = state.entries.findIndex((e) => e.id === id);
+    if (idx === -1) {
+      U.toast("Entry not found", "bad");
+      return;
+    }
+    const ok = window.confirm("Delete this entry?");
+    if (!ok) return;
+
+    state.entries.splice(idx, 1);
+    D.saveState(state);
+    renderAll();
+    U.toast("Entry deleted", "good");
+  }
+
+  function onLogTableClick(ev) {
+    const target = ev.target;
+    if (!target) return;
+    const btn = target.closest("button[data-action]");
+    if (!btn) return;
+
+    const action = btn.getAttribute("data-action");
+    const id = btn.getAttribute("data-id");
+
+    if (action === "delete-entry") {
+      handleDeleteEntry(id);
+    }
   }
 
   // ---------- backup / restore ----------
@@ -239,6 +278,11 @@
     $("savePrices").addEventListener("click", saveSettingsFromInputs);
     $("exportBackup").addEventListener("click", exportBackup);
     $("importBackup").addEventListener("click", importBackup);
+
+    const logContainer = $("logTable");
+    if (logContainer) {
+      logContainer.addEventListener("click", onLogTableClick);
+    }
 
     syncSettingsToInputs();
     wireTabs();
