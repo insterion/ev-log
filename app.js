@@ -8,6 +8,7 @@
   const $ = (id) => document.getElementById(id);
 
   const state = D.loadState();
+  let currentEditId = null; // which entry (id) is being edited, or null
 
   // ---------- tabs ----------
 
@@ -76,6 +77,41 @@
     }
   }
 
+  function resetEditMode() {
+    currentEditId = null;
+    const addBtn = $("addEntry");
+    if (addBtn) {
+      addBtn.textContent = "Add entry";
+    }
+  }
+
+  function startEditEntry(id) {
+    if (!id) {
+      U.toast("Missing entry id", "bad");
+      return;
+    }
+    const entry = state.entries.find((e) => e.id === id);
+    if (!entry) {
+      U.toast("Entry not found", "bad");
+      return;
+    }
+
+    currentEditId = id;
+
+    $("date").value = entry.date || todayISO();
+    $("kwh").value = entry.kwh;
+    $("type").value = entry.type;
+    $("price").value = entry.price;
+    $("note").value = entry.note || "";
+
+    const addBtn = $("addEntry");
+    if (addBtn) {
+      addBtn.textContent = "Update entry";
+    }
+
+    U.toast("Editing entry", "info");
+  }
+
   // ---------- rendering ----------
 
   function renderAll() {
@@ -92,7 +128,7 @@
     U.renderCompare("compareStats", cmp);
   }
 
-  // ---------- add entry ----------
+  // ---------- add / update entry ----------
 
   function onAddEntry() {
     let date = $("date").value || todayISO();
@@ -110,21 +146,45 @@
       price = autoPriceForType(type);
     }
 
-    const entry = {
-      id: (window.crypto && window.crypto.randomUUID)
-        ? window.crypto.randomUUID()
-        : "e_" + Date.now().toString(36),
-      date,
-      kwh,
-      type,
-      price,
-      note
-    };
+    if (!currentEditId) {
+      // normal add
+      const entry = {
+        id:
+          window.crypto && window.crypto.randomUUID
+            ? window.crypto.randomUUID()
+            : "e_" + Date.now().toString(36),
+        date,
+        kwh,
+        type,
+        price,
+        note
+      };
 
-    state.entries.push(entry);
-    D.saveState(state);
-    renderAll();
-    U.toast("Entry added", "good");
+      state.entries.push(entry);
+      D.saveState(state);
+      renderAll();
+      U.toast("Entry added", "good");
+    } else {
+      // update existing
+      const idx = state.entries.findIndex((e) => e.id === currentEditId);
+      if (idx === -1) {
+        U.toast("Entry to update not found", "bad");
+        resetEditMode();
+        return;
+      }
+
+      const entry = state.entries[idx];
+      entry.date = date;
+      entry.kwh = kwh;
+      entry.type = type;
+      entry.price = price;
+      entry.note = note;
+
+      D.saveState(state);
+      renderAll();
+      U.toast("Entry updated", "good");
+      resetEditMode();
+    }
   }
 
   function onSameAsLast() {
@@ -155,9 +215,10 @@
     }
 
     const cost = {
-      id: (window.crypto && window.crypto.randomUUID)
-        ? window.crypto.randomUUID()
-        : "c_" + Date.now().toString(36),
+      id:
+        window.crypto && window.crypto.randomUUID
+          ? window.crypto.randomUUID()
+          : "c_" + Date.now().toString(36),
       date,
       category,
       amount,
@@ -186,6 +247,9 @@
     if (!ok) return;
 
     state.entries.splice(idx, 1);
+    if (currentEditId === id) {
+      resetEditMode();
+    }
     D.saveState(state);
     renderAll();
     U.toast("Entry deleted", "good");
@@ -202,6 +266,8 @@
 
     if (action === "delete-entry") {
       handleDeleteEntry(id);
+    } else if (action === "edit-entry") {
+      startEditEntry(id);
     }
   }
 
@@ -256,6 +322,7 @@
       D.saveState(state);
       syncSettingsToInputs();
       renderAll();
+      resetEditMode();
       U.toast("Backup restored", "good");
     } catch (e) {
       console.error(e);
@@ -287,6 +354,7 @@
     syncSettingsToInputs();
     wireTabs();
     renderAll();
+    resetEditMode();
   }
 
   wire();
