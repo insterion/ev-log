@@ -23,6 +23,17 @@
     return { kwh, cost, count: entries.length };
   }
 
+  function daysInMonthKey(key) {
+    // key = "YYYY-MM"
+    if (!key || key.length < 7) return 30;
+    const parts = key.split("-");
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10); // 1–12
+    if (!year || !month) return 30;
+    // new Date(year, month, 0) -> last day of that month
+    return new Date(year, month, 0).getDate();
+  }
+
   function buildSummary(entries) {
     if (!entries.length) return { thisMonth: null, lastMonth: null, avg: null };
 
@@ -34,12 +45,24 @@
     const lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastKey = lastDate.toISOString().slice(0, 7);
 
-    const thisMonth = map.get(thisKey)
-      ? monthTotals(map.get(thisKey))
-      : null;
-    const lastMonth = map.get(lastKey)
-      ? monthTotals(map.get(lastKey))
-      : null;
+    let thisMonth = null;
+    let lastMonth = null;
+
+    const thisArr = map.get(thisKey);
+    if (thisArr) {
+      thisMonth = monthTotals(thisArr);
+      const dim = daysInMonthKey(thisKey);
+      thisMonth.avgPrice = thisMonth.kwh > 0 ? thisMonth.cost / thisMonth.kwh : 0;
+      thisMonth.perDay = dim > 0 ? thisMonth.cost / dim : 0;
+    }
+
+    const lastArr = map.get(lastKey);
+    if (lastArr) {
+      lastMonth = monthTotals(lastArr);
+      const dimL = daysInMonthKey(lastKey);
+      lastMonth.avgPrice = lastMonth.kwh > 0 ? lastMonth.cost / lastMonth.kwh : 0;
+      lastMonth.perDay = dimL > 0 ? lastMonth.cost / dimL : 0;
+    }
 
     // average over all months we have
     const monthTotalsArr = keys.map((k) => monthTotals(map.get(k)));
@@ -47,7 +70,8 @@
     const totalCost = monthTotalsArr.reduce((s, m) => s + m.cost, 0);
     const avg = {
       kwh: totalKwh / monthTotalsArr.length,
-      cost: totalCost / monthTotalsArr.length
+      cost: totalCost / monthTotalsArr.length,
+      avgPrice: totalKwh > 0 ? totalCost / totalKwh : 0
     };
 
     return { thisMonth, lastMonth, avg };
