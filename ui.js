@@ -65,6 +65,16 @@
             <button
               type="button"
               class="btn-small"
+              data-action="edit-entry"
+              data-id="${idAttr}"
+              title="Edit this entry"
+              style="padding:2px 6px;font-size:0.8rem;margin-right:4px;"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              class="btn-small"
               data-action="delete-entry"
               data-id="${idAttr}"
               title="Delete this entry"
