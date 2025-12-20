@@ -271,6 +271,125 @@
     }
   }
 
+  // ---------- CSV export helpers ----------
+
+  function csvEscape(value) {
+    if (value == null) return "";
+    const s = String(value);
+    if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function downloadCSV(filename, csvText) {
+    try {
+      const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      U.toast("CSV exported", "good");
+    } catch (e) {
+      console.error("CSV download failed", e);
+      U.toast("CSV export failed", "bad");
+    }
+  }
+
+  function exportEntriesCSV() {
+    if (!state.entries.length) {
+      U.toast("No entries to export", "info");
+      return;
+    }
+
+    const header = [
+      "Date",
+      "kWh",
+      "Type",
+      "Price_per_kWh",
+      "Cost",
+      "Note"
+    ];
+
+    const rows = state.entries
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((e) => {
+        const cost = (e.kwh || 0) * (e.price || 0);
+        return [
+          csvEscape(e.date || ""),
+          csvEscape(e.kwh != null ? e.kwh : ""),
+          csvEscape(e.type || ""),
+          csvEscape(e.price != null ? e.price : ""),
+          csvEscape(cost),
+          csvEscape(e.note || "")
+        ].join(",");
+      });
+
+    const csv = [header.join(","), ...rows].join("\n");
+    const today = todayISO();
+    const filename = `ev_log_entries_${today}.csv`;
+    downloadCSV(filename, csv);
+  }
+
+  function exportCostsCSV() {
+    if (!state.costs.length) {
+      U.toast("No costs to export", "info");
+      return;
+    }
+
+    const header = ["Date", "Category", "Amount", "Note"];
+
+    const rows = state.costs
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((c) => {
+        return [
+          csvEscape(c.date || ""),
+          csvEscape(c.category || ""),
+          csvEscape(c.amount != null ? c.amount : ""),
+          csvEscape(c.note || "")
+        ].join(",");
+      });
+
+    const csv = [header.join(","), ...rows].join("\n");
+    const today = todayISO();
+    const filename = `ev_log_costs_${today}.csv`;
+    downloadCSV(filename, csv);
+  }
+
+  function ensureExportButtons() {
+    const logTable = $("logTable");
+    if (logTable && !$("exportEntriesCsv")) {
+      const btn = document.createElement("button");
+      btn.id = "exportEntriesCsv";
+      btn.textContent = "Export log CSV";
+      btn.type = "button";
+      btn.style.marginTop = "6px";
+      btn.addEventListener("click", exportEntriesCSV);
+      if (logTable.parentNode) {
+        logTable.parentNode.insertBefore(btn, logTable.nextSibling);
+      }
+    }
+
+    const costTable = $("costTable");
+    if (costTable && !$("exportCostsCsv")) {
+      const btn2 = document.createElement("button");
+      btn2.id = "exportCostsCsv";
+      btn2.textContent = "Export costs CSV";
+      btn2.type = "button";
+      btn2.style.marginTop = "6px";
+      btn2.addEventListener("click", exportCostsCSV);
+      if (costTable.parentNode) {
+        costTable.parentNode.insertBefore(btn2, costTable.nextSibling);
+      }
+    }
+  }
+
   // ---------- backup / restore ----------
 
   async function exportBackup() {
@@ -354,6 +473,7 @@
     syncSettingsToInputs();
     wireTabs();
     renderAll();
+    ensureExportButtons();
     resetEditMode();
   }
 
