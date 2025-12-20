@@ -282,6 +282,59 @@
       extraLine = `<p>For your recorded EV miles, EV and ICE are roughly the same cost.</p>`;
     }
 
+    // блок за зарядното
+    let chargerBlock = "";
+    if (data.publicRate && data.publicRate > 0) {
+      const pr = data.publicRate;
+      const allPub = data.allPublicCost ?? 0;
+      const saved = data.savedVsPublic ?? 0;
+      const invest = data.chargerInvestment ?? 0;
+      const remaining =
+        typeof data.remainingToRecover === "number"
+          ? data.remainingToRecover
+          : null;
+
+      chargerBlock += `<h4 style="margin-top:10px;">Home charger payoff</h4>`;
+      chargerBlock += `<p>If all your EV kWh were at public price (£${pr.toFixed(
+        3
+      )}/kWh), cost would be <strong>${fmtGBP(allPub)}</strong>.</p>`;
+      chargerBlock += `<p>Your actual EV charging cost so far: <strong>${fmtGBP(
+        data.evCost
+      )}</strong>.</p>`;
+
+      const savedAbs = Math.abs(saved);
+      if (saved > 1) {
+        chargerBlock += `<p>Saved vs all-public: <strong>${fmtGBP(
+          saved
+        )}</strong>.</p>`;
+      } else if (saved < -1) {
+        chargerBlock += `<p>Extra vs all-public: <strong>${fmtGBP(
+          savedAbs
+        )}</strong> (your effective price is higher than public benchmark).</p>`;
+      } else {
+        chargerBlock += `<p>Almost no difference vs all-public price.</p>`;
+      }
+
+      if (invest > 0 && remaining !== null) {
+        chargerBlock += `<p>Charger investment (hardware + install): <strong>${fmtGBP(
+          invest
+        )}</strong>.</p>`;
+
+        if (remaining > 1) {
+          chargerBlock += `<p>Still to recover: <strong>${fmtGBP(
+            remaining
+          )}</strong> from future savings vs public.</p>`;
+        } else if (remaining < -1) {
+          const over = Math.abs(remaining);
+          chargerBlock += `<p>Charger investment already recovered by about <strong>${fmtGBP(
+            over
+          )}</strong>.</p>`;
+        } else {
+          chargerBlock += `<p>Charger is roughly at break-even point.</p>`;
+        }
+      }
+    }
+
     el.innerHTML = `
       <p>Total kWh (all time): <strong>${fmtNum(
         data.totalKwh,
@@ -299,6 +352,7 @@
         Math.abs(diff)
       )}</strong> (${sign})</p>
       ${extraLine}
+      ${chargerBlock}
       <p class="small">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
       2
