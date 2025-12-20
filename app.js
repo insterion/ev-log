@@ -8,7 +8,8 @@
   const $ = (id) => document.getElementById(id);
 
   const state = D.loadState();
-  let currentEditId = null; // which entry (id) is being edited, or null
+  let currentEditId = null;      // charging entry id being edited
+  let currentEditCostId = null;  // cost id being edited
 
   // ---------- tabs ----------
 
@@ -85,6 +86,14 @@
     }
   }
 
+  function resetCostEditMode() {
+    currentEditCostId = null;
+    const btn = $("c_add");
+    if (btn) {
+      btn.textContent = "Add cost";
+    }
+  }
+
   function startEditEntry(id) {
     if (!id) {
       U.toast("Missing entry id", "bad");
@@ -110,6 +119,32 @@
     }
 
     U.toast("Editing entry", "info");
+  }
+
+  function startEditCost(id) {
+    if (!id) {
+      U.toast("Missing cost id", "bad");
+      return;
+    }
+    const cost = state.costs.find((c) => c.id === id);
+    if (!cost) {
+      U.toast("Cost not found", "bad");
+      return;
+    }
+
+    currentEditCostId = id;
+
+    $("c_date").value = cost.date || todayISO();
+    $("c_category").value = cost.category || "Tyres";
+    $("c_amount").value = cost.amount;
+    $("c_note").value = cost.note || "";
+
+    const btn = $("c_add");
+    if (btn) {
+      btn.textContent = "Update cost";
+    }
+
+    U.toast("Editing cost", "info");
   }
 
   // ---------- rendering ----------
@@ -201,7 +236,7 @@
     U.toast("Filled from last", "info");
   }
 
-  // ---------- add cost ----------
+  // ---------- add / update cost ----------
 
   function onAddCost() {
     const date = $("c_date").value || todayISO();
@@ -214,24 +249,44 @@
       return;
     }
 
-    const cost = {
-      id:
-        window.crypto && window.crypto.randomUUID
-          ? window.crypto.randomUUID()
-          : "c_" + Date.now().toString(36),
-      date,
-      category,
-      amount,
-      note
-    };
+    if (!currentEditCostId) {
+      const cost = {
+        id:
+          window.crypto && window.crypto.randomUUID
+            ? window.crypto.randomUUID()
+            : "c_" + Date.now().toString(36),
+        date,
+        category,
+        amount,
+        note
+      };
 
-    state.costs.push(cost);
-    D.saveState(state);
-    renderAll();
-    U.toast("Cost added", "good");
+      state.costs.push(cost);
+      D.saveState(state);
+      renderAll();
+      U.toast("Cost added", "good");
+    } else {
+      const idx = state.costs.findIndex((c) => c.id === currentEditCostId);
+      if (idx === -1) {
+        U.toast("Cost to update not found", "bad");
+        resetCostEditMode();
+        return;
+      }
+
+      const cost = state.costs[idx];
+      cost.date = date;
+      cost.category = category;
+      cost.amount = amount;
+      cost.note = note;
+
+      D.saveState(state);
+      renderAll();
+      U.toast("Cost updated", "good");
+      resetCostEditMode();
+    }
   }
 
-  // ---------- delete entry ----------
+  // ---------- delete entry / cost ----------
 
   function handleDeleteEntry(id) {
     if (!id) {
@@ -255,6 +310,28 @@
     U.toast("Entry deleted", "good");
   }
 
+  function handleDeleteCost(id) {
+    if (!id) {
+      U.toast("Missing cost id", "bad");
+      return;
+    }
+    const idx = state.costs.findIndex((c) => c.id === id);
+    if (idx === -1) {
+      U.toast("Cost not found", "bad");
+      return;
+    }
+    const ok = window.confirm("Delete this cost?");
+    if (!ok) return;
+
+    state.costs.splice(idx, 1);
+    if (currentEditCostId === id) {
+      resetCostEditMode();
+    }
+    D.saveState(state);
+    renderAll();
+    U.toast("Cost deleted", "good");
+  }
+
   function onLogTableClick(ev) {
     const target = ev.target;
     if (!target) return;
@@ -268,6 +345,22 @@
       handleDeleteEntry(id);
     } else if (action === "edit-entry") {
       startEditEntry(id);
+    }
+  }
+
+  function onCostTableClick(ev) {
+    const target = ev.target;
+    if (!target) return;
+    const btn = target.closest("button[data-action]");
+    if (!btn) return;
+
+    const action = btn.getAttribute("data-action");
+    const id = btn.getAttribute("data-id");
+
+    if (action === "delete-cost") {
+      handleDeleteCost(id);
+    } else if (action === "edit-cost") {
+      startEditCost(id);
     }
   }
 
@@ -395,12 +488,10 @@
   async function exportBackup() {
     try {
       const backup = JSON.stringify(state);
-      // първо опитваме в clipboard
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(backup);
+      await navigator.clipboard.writeText(backup);
         U.toast("Backup copied to clipboard", "good");
       } else {
-        // fallback – prompt за копиране ръчно
         const ok = window.prompt("Backup JSON (copy this):", backup);
         if (ok !== null) {
           U.toast("Backup shown (copy manually)", "info");
@@ -422,7 +513,6 @@
     try {
       const parsed = JSON.parse(raw);
 
-      // базова проверка
       if (
         typeof parsed !== "object" ||
         !parsed ||
@@ -433,7 +523,6 @@
         return;
       }
 
-      // презаписваме текущото state
       state.entries = Array.isArray(parsed.entries) ? parsed.entries : [];
       state.costs = Array.isArray(parsed.costs) ? parsed.costs : [];
       state.settings = Object.assign({}, state.settings, parsed.settings);
@@ -442,6 +531,7 @@
       syncSettingsToInputs();
       renderAll();
       resetEditMode();
+      resetCostEditMode();
       U.toast("Backup restored", "good");
     } catch (e) {
       console.error(e);
@@ -452,7 +542,6 @@
   // ---------- wiring ----------
 
   function wire() {
-    // default date
     $("date").value = todayISO();
     $("c_date").value = todayISO();
 
@@ -470,11 +559,17 @@
       logContainer.addEventListener("click", onLogTableClick);
     }
 
+    const costContainer = $("costTable");
+    if (costContainer) {
+      costContainer.addEventListener("click", onCostTableClick);
+    }
+
     syncSettingsToInputs();
     wireTabs();
     renderAll();
     ensureExportButtons();
     resetEditMode();
+    resetCostEditMode();
   }
 
   wire();
