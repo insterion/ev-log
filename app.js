@@ -499,7 +499,7 @@
     };
   }
 
-  // ---- Render ----
+  // ---- Helpers for render ----
   function breakdownText(totals) {
     const order = ["public","public_exp","home","home_exp","custom"];
     const parts = [];
@@ -511,6 +511,131 @@
     return parts.length ? (parts.join(" • ") + ` • base public ${C.fmtGBP(totals.basePublic,3)}/kWh`) : "Няма записи.";
   }
 
+  // ---- EV vs ICE chart (Compare tab) ----
+  function buildCompareChart(state) {
+    const canvas = $("compareChart");
+    const noteEl = $("compareChartNote");
+    if (!canvas || !canvas.getContext) {
+      if (noteEl) noteEl.textContent = "";
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      if (noteEl) noteEl.textContent = "";
+      return;
+    }
+
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const now = new Date();
+
+    // последните 6 календарни месеца (вкл. текущия)
+    const monthDefs = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
+      const iso = d.toISOString().slice(0, 10); // YYYY-MM-DD
+      const key = C.monthKeyFromISO(iso);
+      const label = `${monthNames[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`;
+      monthDefs.push({ key, label });
+    }
+
+    const data = [];
+    for (const m of monthDefs) {
+      const entriesM = state.entries.filter(e => C.monthKeyFromISO(e.date) === m.key);
+      const costsM = state.costs.filter(c => C.monthKeyFromISO(c.date) === m.key);
+      if (!entriesM.length && !costsM.length) continue;
+      const totalsM = C.calcTotalsForEntries(state, entriesM);
+      const cmpM = C.compareRealistic(state, totalsM, costsM, "all");
+      data.push({ label: m.label, ev: cmpM.evTotal, ice: cmpM.iceTotal });
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const widthCss = canvas.clientWidth || 320;
+    const heightCss = 180;
+    canvas.width = widthCss * dpr;
+    canvas.height = heightCss * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, widthCss, heightCss);
+
+    if (!data.length) {
+      if (noteEl) noteEl.textContent = "No data yet for chart – add some entries.";
+      return;
+    }
+
+    if (noteEl) {
+      noteEl.textContent = "EV vs ICE total per month (charging + costs) – last months with data.";
+    }
+
+    const paddingLeft = 36;
+    const paddingRight = 12;
+    const paddingTop = 10;
+    const paddingBottom = 28;
+    const chartW = widthCss - paddingLeft - paddingRight;
+    const chartH = heightCss - paddingTop - paddingBottom;
+
+    const maxVal = Math.max(...data.map(d => Math.max(d.ev, d.ice)), 1);
+
+    ctx.font = "11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.lineWidth = 1;
+
+    // оси
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.beginPath();
+    ctx.moveTo(paddingLeft, paddingTop);
+    ctx.lineTo(paddingLeft, paddingTop + chartH);
+    ctx.lineTo(paddingLeft + chartW, paddingTop + chartH);
+    ctx.stroke();
+
+    const barGroupWidth = chartW / data.length;
+    const barWidth = Math.min(18, (barGroupWidth - 8) / 2);
+
+    data.forEach((d, idx) => {
+      const center = paddingLeft + barGroupWidth * idx + barGroupWidth / 2;
+
+      const evHeight = (d.ev / maxVal) * chartH;
+      const iceHeight = (d.ice / maxVal) * chartH;
+
+      const baseY = paddingTop + chartH;
+
+      // EV bar (left)
+      const evX = center - barWidth - 2;
+      ctx.fillStyle = "#4caf50";
+      ctx.fillRect(evX, baseY - evHeight, barWidth, evHeight);
+
+      // ICE bar (right)
+      const iceX = center + 2;
+      ctx.fillStyle = "#ff9800";
+      ctx.fillRect(iceX, baseY - iceHeight, barWidth, iceHeight);
+
+      // labels under
+      ctx.fillStyle = "#ccc";
+      ctx.textAlign = "center";
+      ctx.fillText(d.label, center, baseY + 12);
+
+      // value on top (по-голямата от двете)
+      const topHeight = Math.max(evHeight, iceHeight);
+      const topVal = Math.max(d.ev, d.ice);
+      if (topVal > 0) {
+        ctx.fillStyle = "#eee";
+        ctx.fillText("£" + topVal.toFixed(0), center, baseY - topHeight - 4);
+      }
+    });
+
+    // легенда
+    const legendY = paddingTop + 10;
+    let lx = paddingLeft + 4;
+    function drawLegend(color, text) {
+      ctx.fillStyle = color;
+      ctx.fillRect(lx, legendY - 8, 10, 10);
+      ctx.fillStyle = "#ddd";
+      ctx.textAlign = "left";
+      ctx.fillText(text, lx + 14, legendY);
+      lx += ctx.measureText(text).width + 40;
+    }
+    drawLegend("#4caf50", "EV");
+    drawLegend("#ff9800", "ICE");
+  }
+
+  // ---- Render ----
   function render(state) {
     const entriesPeriod = C.applyMonthFilterEntries(state.entries, currentFilter);
     const costsPeriod = C.applyMonthFilterCosts(state.costs, currentFilter);
@@ -746,13 +871,13 @@
     `;
     tfoot.appendChild(trf);
 
-    // --- Costs table ---
+    // --- Costs totals + category breakdown ---
+    const costsPeriod = C.applyMonthFilterCosts(state.costs, currentFilter);
     const evT = C.calcCostsTotals(costsPeriod, currentFilter, "ev");
     const iceT = C.calcCostsTotals(costsPeriod, currentFilter, "ice");
     $("costsTotalsLine").textContent =
       `Period: ${label} • EV ${C.fmtGBP(evT.total,2)} • ICE ${C.fmtGBP(iceT.total,2)} • Total ${C.fmtGBP(evT.total + iceT.total,2)} (spread applied)`;
 
-    // Category breakdown
     const allCostsTotals = C.calcCostsTotals(costsPeriod, currentFilter, null);
     const catLineEl = $("costsCatsLine");
     if (catLineEl) {
@@ -818,7 +943,9 @@
         catSel.onchange = () => { d.category = catSel.value; };
 
         tdCat.appendChild(vehSel);
-        tdCat.appendChild(document.createElement("div")).className = "divider";
+        const div = document.createElement("div");
+        div.className = "divider";
+        tdCat.appendChild(div);
         tdCat.appendChild(catSel);
 
       } else {
@@ -929,7 +1056,9 @@
     `;
     costsTfoot.appendChild(trc);
 
+    // бързи бутони + графика + полета
     if ($("quickPanel")?.open) buildLastKwhButtons(state);
+    buildCompareChart(state);
     syncInputs(state);
   }
 
