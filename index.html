@@ -1,500 +1,158 @@
-<!doctype html>
-<!-- tiny change just to retrigger build -->
-<html lang="bg">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EV Log</title>
 
-  <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="./styles.css" />
 
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="manifest" href="./manifest.json" />
+
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">
-        <h1>EV Log</h1>
-        <div class="sub">charging + maintenance • prices saved per entry</div>
-      </div>
-      <div class="tabs">
-        <button class="tabbtn active" data-tab="log">Log</button>
-        <button class="tabbtn" data-tab="costs">Costs</button>
-        <button class="tabbtn" data-tab="summary">Summary</button>
-        <button class="tabbtn" data-tab="settings">Settings</button>
-        <button class="tabbtn" data-tab="compare">Compare</button>
-      </div>
+
+  <header>
+    <h1>EV Log</h1>
+    <h2>charging + maintenance • prices saved per entry</h2>
+  </header>
+
+  <nav>
+    <button class="tabbtn active" data-tab="log">Log</button>
+    <button class="tabbtn" data-tab="costs">Costs</button>
+    <button class="tabbtn" data-tab="summary">Summary</button>
+    <button class="tabbtn" data-tab="settings">Settings</button>
+    <button class="tabbtn" data-tab="compare">Compare</button>
+  </nav>
+
+  <!-- ================= LOG TAB ================= -->
+  <section id="log" class="tab active">
+
+    <div class="section-block">
+      <label>Дата</label>
+      <input type="date" id="date" />
     </div>
 
-    <div class="card">
-
-      <!-- LOG -->
-      <div id="tab-log" class="section active">
-        <div class="row">
-          <div>
-            <label>Дата</label>
-            <input id="e_date" type="date" />
-          </div>
-          <div>
-            <label>kWh</label>
-            <input id="e_kwh" type="number" step="0.1" min="0" placeholder="40" />
-          </div>
-        </div>
-
-        <div class="row3" style="margin-top:10px">
-          <div>
-            <label>Тип</label>
-            <select id="e_type">
-              <option value="public">Публично</option>
-              <option value="public_exp">Публично скъпо</option>
-              <option value="home">Домашно</option>
-              <option value="home_exp">Домашно скъпо</option>
-              <option value="custom">Друга (ръчно)</option>
-            </select>
-          </div>
-          <div>
-            <label>Цена (£/kWh)</label>
-            <input id="e_price" type="number" step="0.001" min="0" />
-          </div>
-          <div>
-            <label>Бележка</label>
-            <input id="e_note" type="text" placeholder="Octopus Go / BP Pulse..." />
-          </div>
-        </div>
-
-        <div class="actions">
-          <button id="addBtn" type="button">Add</button>
-          <button id="sameBtn" type="button">Same as last</button>
-
-          <details style="margin-left:auto">
-            <summary class="tabbtn" style="padding:8px 10px">⋯ More</summary>
-            <div class="moreWrap">
-              <button id="toggleFiltersBtn" class="mini" type="button">Filters</button>
-
-              <button id="exportBtn" class="mini" type="button">Export</button>
-              <button id="csvBtn" class="mini" type="button">CSV (all)</button>
-              <button id="csvThisMonthBtn" class="mini" type="button">CSV (this month)</button>
-
-              <button id="backupFileBtn" class="mini" type="button">Backup file</button>
-              <button id="restoreFileBtn" class="mini" type="button">Restore file</button>
-              <input id="restoreFileInput" type="file" accept="application/json,.json" style="display:none" />
-
-              <button id="importBtn" class="mini" type="button">Import</button>
-              <button id="clearBtn" class="mini" type="button">Clear</button>
-            </div>
-          </details>
-        </div>
-
-        <!-- Quick -->
-        <details class="quickDetails" id="quickPanel">
-          <summary class="quickSummary">Quick</summary>
-          <div class="quickInner">
-            <div class="quickRow">
-              <div class="quickTitle">Quick type</div>
-              <div class="quickBtns">
-                <button class="pill" type="button" id="qt_public">Public</button>
-                <button class="pill" type="button" id="qt_public_exp">Public Exp</button>
-                <button class="pill" type="button" id="qt_home">Home</button>
-                <button class="pill" type="button" id="qt_home_exp">Home Exp</button>
-              </div>
-            </div>
-            <div class="quickRow" style="margin-top:8px">
-              <div class="quickTitle">Last kWh</div>
-              <div class="quickBtns" id="lastKwhBtns"></div>
-            </div>
-          </div>
-        </details>
-
-        <!-- Filters -->
-        <details class="filterDetails" id="filterPanel">
-          <summary class="filterSummary">Filters</summary>
-          <div class="divider"></div>
-          <div class="row3">
-            <div>
-              <label>Search (note + attachments)</label>
-              <input id="f_search" type="text" placeholder="octopus / invoice / drive..." />
-            </div>
-            <div>
-              <label>Type</label>
-              <select id="f_type">
-                <option value="all">All</option>
-                <option value="public">Public</option>
-                <option value="public_exp">Public Exp</option>
-                <option value="home">Home</option>
-                <option value="home_exp">Home Exp</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            <div>
-              <label>Date range</label>
-              <div class="dateRange">
-                <input id="f_from" type="date" />
-                <input id="f_to" type="date" />
-              </div>
-            </div>
-          </div>
-
-          <div class="actions" style="margin-top:10px">
-            <button id="clearFiltersBtn" class="mini" type="button">Clear filters</button>
-          </div>
-        </details>
-
-        <details style="margin-top:10px">
-  <summary>Details (breakdown)</summary>
-
-  <div class="divider"></div>
-  <div class="small" style="margin-bottom:4px;">EV vs ICE – last months</div>
-  <canvas id="compareChart" height="180"></canvas>
-  <div id="compareChartNote" class="small" style="margin-top:4px;"></div>
-
-  <div class="divider"></div>
-  <div class="small" id="breakdown_compare"></div>
-</details>
-
-        <div id="monthLine" class="small" style="margin-top:10px"></div>
-        <div id="lastMonthLine" class="small" style="margin-top:4px"></div>
-
-        <div class="row" style="margin-top:10px">
-          <div>
-            <label>Период</label>
-            <select id="monthFilter">
-              <option value="all">All</option>
-              <option value="this">This month</option>
-              <option value="last">Last month</option>
-            </select>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>Тип</th>
-              <th>kWh</th>
-              <th>£/kWh</th>
-              <th>Цена (£)</th>
-              <th>Saved (£)</th>
-              <th>⋯</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-          <tfoot id="tfoot"></tfoot>
-        </table>
-      </div>
-
-      <!-- COSTS -->
-      <div id="tab-costs" class="section">
-        <div class="row3">
-          <div>
-            <label>Дата</label>
-            <input id="c_date" type="date" />
-          </div>
-          <div>
-            <label>Applies to</label>
-            <select id="c_vehicle">
-              <option value="ev" selected>EV</option>
-              <option value="ice">ICE</option>
-            </select>
-          </div>
-          <div>
-            <label>Категория</label>
-            <select id="c_cat">
-              <option value="tyres">Tyres</option>
-              <option value="brakes">Brakes</option>
-              <option value="service">Service</option>
-              <option value="mot">MOT</option>
-              <option value="insurance">Insurance</option>
-              <option value="tax">Tax</option>
-              <option value="repairs">Repairs</option>
-              <option value="accessories">Accessories</option>
-              <option value="other" selected>Other</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row3" style="margin-top:10px">
-          <div>
-            <label>£ (amount)</label>
-            <input id="c_amount" type="number" step="0.01" min="0" placeholder="120.00" />
-          </div>
-          <div>
-            <label>Mileage (optional)</label>
-            <input id="c_miles" type="number" step="1" min="0" placeholder="45000" />
-          </div>
-          <div>
-            <label>Описание / бележка</label>
-            <input id="c_note" type="text" placeholder="Front pads + labour / 2 tyres..." />
-          </div>
-        </div>
-
-        <div class="actions">
-          <button id="c_addBtn" type="button">Add cost</button>
-
-          <details style="margin-left:auto">
-            <summary class="tabbtn" style="padding:8px 10px">⋯ More</summary>
-            <div class="moreWrap">
-              <div class="row3" style="margin:0; align-items:end">
-                <div>
-                  <label>Spread over (default)</label>
-                  <select id="c_spread_default">
-                    <option value="oneoff" selected>One-off</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                </div>
-                <div style="grid-column: span 2;">
-                  <div class="small">
-                    “Spread over” влияе на сравненията по месеци (This/Last). One-off остава както е.
-                  </div>
-                </div>
-              </div>
-
-              <button id="c_csvBtn" class="mini" type="button">CSV (costs)</button>
-            </div>
-          </details>
-        </div>
-
-        <details style="margin-top:10px">
-  <summary>Totals (for current period)</summary>
-  <div class="divider"></div>
-  <div class="small" id="costsTotalsLine"></div>
-  <div class="small" id="costsCatsLine" style="margin-top:4px;"></div>
-</details>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>Category</th>
-              <th>£</th>
-              <th>Spread</th>
-              <th>Mileage</th>
-              <th>Note</th>
-              <th>⋯</th>
-            </tr>
-          </thead>
-          <tbody id="costsTbody"></tbody>
-          <tfoot id="costsTfoot"></tfoot>
-        </table>
-      </div>
-
-      <!-- SUMMARY -->
-      <div id="tab-summary" class="section">
-        <div class="kpi">
-          <div class="box">
-            <div class="t">Общо заредени</div>
-            <div class="v" id="tot_kwh">—</div>
-            <div class="small">kWh</div>
-          </div>
-          <div class="box">
-            <div class="t">Общо платено (зареждания)</div>
-            <div class="v" id="tot_cost">—</div>
-            <div class="small">£</div>
-          </div>
-
-          <div class="box">
-            <div class="t">EV costs (period)</div>
-            <div class="v" id="ev_costs_period">—</div>
-            <div class="small">£ (spread applied)</div>
-          </div>
-          <div class="box">
-            <div class="t">ICE costs (period)</div>
-            <div class="v" id="ice_costs_period">—</div>
-            <div class="small">£ (spread applied)</div>
-          </div>
-
-          <div class="box">
-            <div class="t">Публични зареждания</div>
-            <div class="v" id="public_cost">—</div>
-            <div class="small">£ (public + public expensive)</div>
-          </div>
-          <div class="box">
-            <div class="t">Спестено vs базова публична</div>
-            <div class="v" id="saved_vs_public">—</div>
-            <div class="small">£ (за НЕ-публични)</div>
-          </div>
-
-          <div class="box">
-            <div class="t">Инвестиция</div>
-            <div class="v" id="inv_total">—</div>
-            <div class="small">£ (charger + install)</div>
-          </div>
-          <div class="box">
-            <div class="t">Остава да се изплати</div>
-            <div class="v" id="remain_payback">—</div>
-            <div class="small" id="remain_note">Инвестиция + публични − спестено</div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="kpi">
-          <div class="box">
-            <div class="t">This month</div>
-            <div class="v" id="m_this_line">—</div>
-            <div class="small" id="m_this_sub">kWh · £ · saved</div>
-          </div>
-          <div class="box">
-            <div class="t">Last month</div>
-            <div class="v" id="m_last_line">—</div>
-            <div class="small" id="m_last_sub">kWh · £ · saved</div>
-          </div>
-        </div>
-
-        <div class="actions" style="margin-top:10px">
-          <button id="copyMonthlyBtn" type="button" class="mini">Copy monthly summary</button>
-        </div>
-
-        <details style="margin-top:10px">
-          <summary>Details (breakdown)</summary>
-          <div class="divider"></div>
-          <div class="small" id="breakdown_summary"></div>
-        </details>
-      </div>
-
-      <!-- SETTINGS -->
-      <div id="tab-settings" class="section">
-        <details open>
-          <summary>Prices</summary>
-          <div class="divider"></div>
-
-          <div class="row">
-            <div>
-              <label>Публично (£/kWh) — базова за сравнение</label>
-              <input id="p_public" type="number" step="0.001" min="0" value="0.56" />
-            </div>
-            <div>
-              <label>Публично скъпо (£/kWh)</label>
-              <input id="p_public_exp" type="number" step="0.001" min="0" value="0.76" />
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:10px">
-            <div>
-              <label>Домашно (£/kWh)</label>
-              <input id="p_home" type="number" step="0.001" min="0" value="0.09" />
-            </div>
-            <div>
-              <label>Домашно скъпо (£/kWh)</label>
-              <input id="p_home_exp" type="number" step="0.001" min="0" value="0.30" />
-            </div>
-          </div>
-
-          <div class="small" style="margin-top:10px">
-            Saved(£) за ред = (Публично базово − цена на реда) × kWh (само за НЕ-публични).
-          </div>
-        </details>
-
-        <details style="margin-top:10px">
-          <summary>Charger</summary>
-          <div class="divider"></div>
-          <div class="row">
-            <div>
-              <label>Цена на зарядно (£)</label>
-              <input id="charger_cost" type="number" step="1" min="0" value="700" />
-            </div>
-            <div>
-              <label>Инсталация (£)</label>
-              <input id="install_cost" type="number" step="1" min="0" value="300" />
-            </div>
-          </div>
-        </details>
-
-        <div id="lastBackupLine" class="small" style="margin-top:10px; display:none"></div>
-      </div>
-
-      <!-- COMPARE -->
-      <div id="tab-compare" class="section">
-        <details open>
-          <summary>ICE vs EV (realistic)</summary>
-          <div class="divider"></div>
-          <div class="row3">
-            <div>
-              <label>ICE разход (MPG UK)</label>
-              <input id="ice_mpg" type="number" step="0.1" min="1" value="45" />
-            </div>
-            <div>
-              <label>EV ефективност (miles/kWh)</label>
-              <input id="ev_mpkwh" type="number" step="0.1" min="0.1" value="3" />
-            </div>
-            <div>
-              <label>Цена гориво (£/литър)</label>
-              <input id="fuel_price" type="number" step="0.01" min="0" value="1.50" />
-            </div>
-          </div>
-
-          <div class="row3" style="margin-top:10px">
-            <div>
-              <label>ICE maintenance fallback (£/mile)</label>
-              <input id="ice_maint_per_mile" type="number" step="0.001" min="0" value="0.03" />
-            </div>
-            <div style="grid-column: span 2;">
-              <div class="small" style="margin-top:22px">
-                Fallback се използва само ако нямаш ICE costs записи за избрания период.
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <div class="divider"></div>
-
-        <div class="kpi">
-          <div class="box">
-            <div class="t">Мили (за периода)</div>
-            <div class="v" id="est_miles">—</div>
-            <div class="small">estimated miles</div>
-          </div>
-          <div class="box">
-            <div class="t">EV total</div>
-            <div class="v" id="ev_total_real">—</div>
-            <div class="small">£ (charging + EV costs)</div>
-          </div>
-          <div class="box">
-            <div class="t">ICE total</div>
-            <div class="v" id="ice_total_real">—</div>
-            <div class="small">£ (fuel + ICE maint)</div>
-          </div>
-          <div class="box">
-            <div class="t">Difference (ICE − EV)</div>
-            <div class="v" id="ice_vs_ev_diff">—</div>
-            <div class="small">£ (плюс = EV по-евтино)</div>
-          </div>
-
-          <div class="box">
-            <div class="t">EV £/mile</div>
-            <div class="v" id="ev_per_mile">—</div>
-            <div class="small">£/mile</div>
-          </div>
-          <div class="box">
-            <div class="t">ICE £/mile</div>
-            <div class="v" id="ice_per_mile">—</div>
-            <div class="small">£/mile</div>
-          </div>
-        </div>
-
-        <details style="margin-top:10px">
-          <summary>Details (breakdown)</summary>
-          <div class="divider"></div>
-          <div class="small" id="breakdown_compare"></div>
-        </details>
-      </div>
-
+    <div class="section-block">
+      <label>kWh</label>
+      <input type="number" id="kwh" placeholder="40" inputmode="decimal" />
     </div>
-  </div>
 
-  <div id="toast" aria-live="polite"></div>
+    <div class="section-block">
+      <label>Тип</label>
+      <select id="type">
+        <option value="public">Публично</option>
+        <option value="public-xp">Публично скъпо</option>
+        <option value="home">Домашно</option>
+        <option value="home-xp">Домашно скъпо</option>
+      </select>
+    </div>
 
-  <script>
-  // Временно махаме всички service workers за това приложение
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then(regs => regs.forEach(r => r.unregister()))
-      .catch(() => {});
-  }
-</script>
-  
-  <!-- split scripts (order matters) -->
+    <div class="section-block">
+      <label>Цена (£/kWh)</label>
+      <input type="number" id="price" placeholder="0.56" inputmode="decimal" />
+    </div>
+
+    <div class="section-block">
+      <label>Бележка</label>
+      <input type="text" id="note" placeholder="BP / Gridserve / Go…" />
+    </div>
+
+    <button id="addEntry">Add</button>
+    <button id="sameAsLast">Same as last</button>
+
+    <details id="logDetails">
+      <summary>Details (breakdown)</summary>
+      <div id="logTable"></div>
+    </details>
+
+  </section>
+
+  <!-- ================= COSTS TAB ================= -->
+  <section id="costs" class="tab">
+
+    <div class="section-block">
+      <label>Дата</label>
+      <input type="date" id="c_date" />
+    </div>
+
+    <div class="section-block">
+      <label>Category</label>
+      <select id="c_category">
+        <option value="Tyres">Tyres</option>
+        <option value="Pads">Pads</option>
+        <option value="Service">Service</option>
+        <option value="Insurance">Insurance</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+
+    <div class="section-block">
+      <label>£ (amount)</label>
+      <input type="number" id="c_amount" placeholder="80" inputmode="decimal" />
+    </div>
+
+    <div class="section-block">
+      <label>Description</label>
+      <input type="text" id="c_note" placeholder="Front pads + labour" />
+    </div>
+
+    <button id="c_add">Add cost</button>
+
+    <details id="costDetails">
+      <summary>Totals (for current period)</summary>
+      <div id="costTable"></div>
+    </details>
+
+  </section>
+
+  <!-- ================= SUMMARY TAB ================= -->
+  <section id="summary" class="tab">
+
+    <h3>This month</h3>
+    <div id="summary_this"></div>
+
+    <h3>Last month</h3>
+    <div id="summary_last"></div>
+
+    <h3>Average total</h3>
+    <div id="summary_avg"></div>
+
+  </section>
+
+  <!-- ================= SETTINGS TAB ================= -->
+  <section id="settings" class="tab">
+
+    <h2>Prices (£/kWh)</h2>
+
+    <label>Public</label>
+    <input type="number" id="p_public" step="0.001" />
+
+    <label>Public xp</label>
+    <input type="number" id="p_public_xp" step="0.001" />
+
+    <label>Home</label>
+    <input type="number" id="p_home" step="0.001" />
+
+    <label>Home xp</label>
+    <input type="number" id="p_home_xp" step="0.001" />
+
+    <button id="savePrices">Save prices</button>
+
+  </section>
+
+  <!-- ================= COMPARE TAB ================= -->
+  <section id="compare" class="tab">
+
+    <h2>EV vs ICE calculations</h2>
+
+    <div id="compareStats"></div>
+
+  </section>
+
+  <div id="toast"></div>
+
+  <!-- scripts -->
   <script src="./data.js"></script>
   <script src="./calc.js"></script>
   <script src="./ui.js"></script>
