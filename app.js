@@ -1057,8 +1057,15 @@
     costsTfoot.appendChild(trc);
 
     // бързи бутони + графика + полета
-    if ($("quickPanel")?.open) buildLastKwhButtons(state);
-    buildCompareChart(state);
+   if ($("quickPanel")?.open) buildLastKwhButtons(state);
+
+    // защитаваме се – ако има грешка в графиката, да не чупи цялото app
+    try {
+      buildCompareChart(state);
+    } catch (e) {
+      // по желание: console.log(e);
+    }
+
     syncInputs(state);
   }
 
