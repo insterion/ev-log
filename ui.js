@@ -188,15 +188,38 @@
 
     function block(data) {
       if (!data) return "<p>No data.</p>";
+
+      const avgPriceLine =
+        data.avgPrice && data.avgPrice > 0
+          ? `<p>Avg price: <strong>£${data.avgPrice.toFixed(
+              3
+            )}</strong> / kWh</p>`
+          : "";
+
+      const perDayLine =
+        data.perDay && data.perDay > 0
+          ? `<p>~ <strong>${fmtGBP(
+              data.perDay
+            )}</strong> / day (calendar)</p>`
+          : "";
+
+      const sessionsLine =
+        data.count != null
+          ? `<p>Sessions: <strong>${data.count}</strong></p>`
+          : "";
+
       return `
         <p>kWh: <strong>${fmtNum(data.kwh, 1)}</strong></p>
         <p>Cost: <strong>${fmtGBP(data.cost)}</strong></p>
-        <p>Sessions: <strong>${data.count}</strong></p>
+        ${sessionsLine}
+        ${avgPriceLine}
+        ${perDayLine}
       `;
     }
 
     idThis.innerHTML = block(summary.thisMonth);
     idLast.innerHTML = block(summary.lastMonth);
+
     idAvg.innerHTML = summary.avg
       ? `
       <p>Avg kWh / month: <strong>${fmtNum(
@@ -204,6 +227,9 @@
         1
       )}</strong></p>
       <p>Avg £ / month: <strong>${fmtGBP(summary.avg.cost)}</strong></p>
+      <p>Avg price (all months): <strong>£${summary.avg.avgPrice.toFixed(
+        3
+      )}</strong> / kWh</p>
     `
       : "<p>No data.</p>";
   }
