@@ -248,6 +248,29 @@
     const diff = data.iceCost - data.evCost;
     const sign = diff > 0 ? "saved" : "extra";
 
+    const miles = data.miles || 0;
+    const evPerMile =
+      miles > 0
+        ? data.evPerMile ?? data.evCost / miles
+        : 0;
+    const icePerMile =
+      miles > 0
+        ? data.icePerMile ?? data.iceCost / miles
+        : 0;
+
+    let extraLine = "";
+    if (diff > 1) {
+      extraLine = `<p>For your recorded EV miles, ICE would cost <strong>${fmtGBP(
+        diff
+      )}</strong> more.</p>`;
+    } else if (diff < -1) {
+      extraLine = `<p>For your recorded EV miles, EV would cost <strong>${fmtGBP(
+        Math.abs(diff)
+      )}</strong> more than ICE (check prices/assumptions).</p>`;
+    } else {
+      extraLine = `<p>For your recorded EV miles, EV and ICE are roughly the same cost.</p>`;
+    }
+
     el.innerHTML = `
       <p>Total kWh (all time): <strong>${fmtNum(
         data.totalKwh,
@@ -256,12 +279,15 @@
       <p>Estimated miles (@ ${fmtNum(
         data.evMilesPerKwh,
         1
-      )} mi/kWh): <strong>${fmtNum(data.miles, 0)}</strong></p>
+      )} mi/kWh): <strong>${fmtNum(miles, 0)}</strong></p>
       <p>EV cost: <strong>${fmtGBP(data.evCost)}</strong></p>
       <p>ICE cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
+      <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
+      <p>ICE £/mile: <strong>£${icePerMile.toFixed(3)}</strong></p>
       <p>Difference: <strong>${fmtGBP(
         Math.abs(diff)
       )}</strong> (${sign})</p>
+      ${extraLine}
       <p class="small">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
       2
