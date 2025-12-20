@@ -1,158 +1,90 @@
-/* calc.js - month helpers + totals + filters + compare */
+// calc.js – simple calculations
+
 (function () {
-  const { num } = window.EVData;
-
-  function fmtGBP(x, decimals = 2) { return "£" + (Number.isFinite(x) ? x.toFixed(decimals) : "0.00"); }
-  function fmt(x, decimals = 1) { return (Number.isFinite(x) ? x.toFixed(decimals) : "0.0"); }
-
-  function monthKeyFromISO(iso) {
-    return (typeof iso === "string" && iso.length >= 7) ? iso.slice(0, 7) : "unknown";
-  }
-  function thisMonthKey() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    return `${y}-${m}`;
-  }
-  function lastMonthKey() {
-    const [y, m] = thisMonthKey().split("-").map(n => parseInt(n, 10));
-    const mm = m - 1;
-    if (mm >= 1) return `${y}-${String(mm).padStart(2, "0")}`;
-    return `${y - 1}-12`;
+  function getMonthKey(dateStr) {
+    if (!dateStr) return "";
+    return dateStr.slice(0, 7); // "YYYY-MM"
   }
 
-  function applyMonthFilterEntries(entries, currentFilter) {
-    if (currentFilter === "all") return entries;
-    const thisKey = thisMonthKey();
-    const lastKey = lastMonthKey();
-    return entries.filter(e => {
-      const k = monthKeyFromISO(e.date);
-      return currentFilter === "this" ? k === thisKey : k === lastKey;
-    });
-  }
-  function applyMonthFilterCosts(costs, currentFilter) {
-    if (currentFilter === "all") return costs;
-    const thisKey = thisMonthKey();
-    const lastKey = lastMonthKey();
-    return costs.filter(c => {
-      const k = monthKeyFromISO(c.date);
-      return currentFilter === "this" ? k === thisKey : k === lastKey;
-    });
-  }
-
-  function calcTotalsForEntries(state, entries) {
-    const basePublic = num(state.prices.public);
-    let kwh = 0, cost = 0, saved = 0, publicCost = 0;
-    const byType = {};
+  function groupByMonth(entries) {
+    const map = new Map();
     for (const e of entries) {
-      const ek = num(e.kwh);
-      const ep = num(e.price);
-      const ec = ek * ep;
-      kwh += ek;
-      cost += ec;
-      const t = e.type || "custom";
-      if (!byType[t]) byType[t] = { kwh: 0, cost: 0, count: 0 };
-      byType[t].kwh += ek; byType[t].cost += ec; byType[t].count++;
-      const isPublic = (t === "public" || t === "public_exp");
-      if (isPublic) publicCost += ec;
-      if (!isPublic) saved += (basePublic - ep) * ek;
+      const key = getMonthKey(e.date);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(e);
     }
-    return { kwh, cost, saved, publicCost, byType, basePublic };
+    return map;
   }
 
-  function spreadFactorForCurrentPeriod(spread, currentFilter) {
-    if (currentFilter === "all") return 1;
-    if (spread === "yearly") return 1 / 12;
-    if (spread === "monthly") return 1;
-    return 1;
-  }
-  function calcCostsTotals(costs, currentFilter, vehicle /* 'ev'|'ice'|null */) {
-    let total = 0;
-    const byCat = {};
-    const f = (spread) => spreadFactorForCurrentPeriod(spread, currentFilter);
-    for (const c of costs) {
-      if (vehicle && c.vehicle !== vehicle) continue;
-      const a = num(c.amount) * f(c.spread);
-      total += a;
-      const k = c.category || "other";
-      if (!byCat[k]) byCat[k] = { total: 0, count: 0 };
-      byCat[k].total += a;
-      byCat[k].count++;
-    }
-    return { total, byCat };
+  function monthTotals(entries) {
+    const kwh = entries.reduce((s, e) => s + (e.kwh || 0), 0);
+    const cost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
+    return { kwh, cost, count: entries.length };
   }
 
-  // ---- Search includes note + attachments ----
-  function entryMatchesSearch(e, searchLower) {
-    if (!searchLower) return true;
-    const note = (e.note || "").toLowerCase();
-    if (note.includes(searchLower)) return true;
+  function buildSummary(entries) {
+    if (!entries.length) return { thisMonth: null, lastMonth: null, avg: null };
 
-    const atts = Array.isArray(e.attachments) ? e.attachments : [];
-    for (const a of atts) {
-      const n = (a?.name || "").toLowerCase();
-      const u = (a?.url || "").toLowerCase();
-      if (n.includes(searchLower) || u.includes(searchLower)) return true;
-    }
-    return false;
+    const map = groupByMonth(entries);
+    const keys = Array.from(map.keys()).sort(); // ascending
+
+    const now = new Date();
+    const thisKey = now.toISOString().slice(0, 7);
+    const lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastKey = lastDate.toISOString().slice(0, 7);
+
+    const thisMonth = map.get(thisKey)
+      ? monthTotals(map.get(thisKey))
+      : null;
+    const lastMonth = map.get(lastKey)
+      ? monthTotals(map.get(lastKey))
+      : null;
+
+    // average over all months we have
+    const monthTotalsArr = keys.map((k) => monthTotals(map.get(k)));
+    const totalKwh = monthTotalsArr.reduce((s, m) => s + m.kwh, 0);
+    const totalCost = monthTotalsArr.reduce((s, m) => s + m.cost, 0);
+    const avg = {
+      kwh: totalKwh / monthTotalsArr.length,
+      cost: totalCost / monthTotalsArr.length
+    };
+
+    return { thisMonth, lastMonth, avg };
   }
 
-  function passesFiltersEntry(e, uiFilter) {
-    const s = (uiFilter.search || "").trim().toLowerCase();
-    if (!entryMatchesSearch(e, s)) return false;
+  function buildCompare(entries, settings) {
+    if (!entries.length) return null;
 
-    if (uiFilter.type && uiFilter.type !== "all") {
-      if ((e.type || "custom") !== uiFilter.type) return false;
-    }
-    if (uiFilter.from && e.date < uiFilter.from) return false;
-    if (uiFilter.to && e.date > uiFilter.to) return false;
-    return true;
-  }
+    const totalKwh = entries.reduce((s, e) => s + (e.kwh || 0), 0);
+    const evCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
 
-  function applyAllEntryFilters(state, currentFilter, uiFilter) {
-    const monthFiltered = applyMonthFilterEntries(state.entries, currentFilter);
-    return monthFiltered.filter(e => passesFiltersEntry(e, uiFilter));
-  }
+    // Assumptions
+    const evMilesPerKwh = 3.0;
+    const iceMpg = 45;
+    const icePerLitre = 1.50;
 
-  function compareRealistic(state, chargingTotalsPeriod, costsPeriod, currentFilter) {
-    const evMPKWh = Math.max(0.1, num(state.compare.ev_mpkwh));
-    const iceMPG = Math.max(0.1, num(state.compare.ice_mpg));
-    const fuelPrice = Math.max(0, num(state.compare.fuel_price));
-    const iceMaintFallback = Math.max(0, num(state.compare.ice_maint_per_mile));
+    const miles = totalKwh * evMilesPerKwh;
 
-    const miles = chargingTotalsPeriod.kwh * evMPKWh;
+    // mpg (imperial) -> litres:
+    // miles / mpg = gallons, gallons * 4.546 = litres
+    const gallons = miles / iceMpg;
+    const litres = gallons * 4.546;
+    const iceCost = litres * icePerLitre;
 
-    const evCosts = calcCostsTotals(costsPeriod, currentFilter, "ev").total;
-    const evTotal = chargingTotalsPeriod.cost + evCosts;
-
-    const ukGallons = miles / iceMPG;
-    const liters = ukGallons * 4.54609;
-    const fuelCost = liters * fuelPrice;
-
-    const iceCostsTotals = calcCostsTotals(costsPeriod, currentFilter, "ice");
-    const hasIceCosts = (iceCostsTotals.total > 0.0001);
-    const iceMaint = hasIceCosts ? iceCostsTotals.total : (miles * iceMaintFallback);
-
-    const iceTotal = fuelCost + iceMaint;
-    const diff = iceTotal - evTotal;
-
-    const evPerMile = miles > 0 ? (evTotal / miles) : 0;
-    const icePerMile = miles > 0 ? (iceTotal / miles) : 0;
-
-    return { miles, evCosts, iceCosts: iceCostsTotals.total, hasIceCosts, evTotal, fuelCost, iceMaint, iceTotal, diff, evPerMile, icePerMile, liters };
+    return {
+      totalKwh,
+      evCost,
+      miles,
+      iceCost,
+      iceMpg,
+      icePerLitre,
+      evMilesPerKwh
+    };
   }
 
   window.EVCalc = {
-    fmtGBP,
-    fmt,
-    monthKeyFromISO,
-    thisMonthKey,
-    lastMonthKey,
-    applyMonthFilterEntries,
-    applyMonthFilterCosts,
-    calcTotalsForEntries,
-    calcCostsTotals,
-    applyAllEntryFilters,
-    compareRealistic
+    buildSummary,
+    buildCompare
   };
 })();
