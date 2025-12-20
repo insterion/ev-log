@@ -485,6 +485,15 @@
 
   <div id="toast" aria-live="polite"></div>
 
+  <script>
+  // Временно махаме всички service workers за това приложение
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then(regs => regs.forEach(r => r.unregister()))
+      .catch(() => {});
+  }
+</script>
+  
   <!-- split scripts (order matters) -->
   <script src="./data.js"></script>
   <script src="./calc.js"></script>
