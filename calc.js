@@ -52,7 +52,8 @@
     if (thisArr) {
       thisMonth = monthTotals(thisArr);
       const dim = daysInMonthKey(thisKey);
-      thisMonth.avgPrice = thisMonth.kwh > 0 ? thisMonth.cost / thisMonth.kwh : 0;
+      thisMonth.avgPrice =
+        thisMonth.kwh > 0 ? thisMonth.cost / thisMonth.kwh : 0;
       thisMonth.perDay = dim > 0 ? thisMonth.cost / dim : 0;
     }
 
@@ -60,7 +61,8 @@
     if (lastArr) {
       lastMonth = monthTotals(lastArr);
       const dimL = daysInMonthKey(lastKey);
-      lastMonth.avgPrice = lastMonth.kwh > 0 ? lastMonth.cost / lastMonth.kwh : 0;
+      lastMonth.avgPrice =
+        lastMonth.kwh > 0 ? lastMonth.cost / lastMonth.kwh : 0;
       lastMonth.perDay = dimL > 0 ? lastMonth.cost / dimL : 0;
     }
 
@@ -96,6 +98,9 @@
     const litres = gallons * 4.546;
     const iceCost = litres * icePerLitre;
 
+    const evPerMile = miles > 0 ? evCost / miles : 0;
+    const icePerMile = miles > 0 ? iceCost / miles : 0;
+
     return {
       totalKwh,
       evCost,
@@ -103,7 +108,9 @@
       iceCost,
       iceMpg,
       icePerLitre,
-      evMilesPerKwh
+      evMilesPerKwh,
+      evPerMile,
+      icePerMile
     };
   }
 
