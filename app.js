@@ -162,6 +162,64 @@
     U.toast("Cost added", "good");
   }
 
+  // ---------- backup / restore ----------
+
+  async function exportBackup() {
+    try {
+      const backup = JSON.stringify(state);
+      // първо опитваме в clipboard
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(backup);
+        U.toast("Backup copied to clipboard", "good");
+      } else {
+        // fallback – prompt за копиране ръчно
+        const ok = window.prompt("Backup JSON (copy this):", backup);
+        if (ok !== null) {
+          U.toast("Backup shown (copy manually)", "info");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      U.toast("Backup failed", "bad");
+    }
+  }
+
+  function importBackup() {
+    const raw = window.prompt(
+      "Paste backup JSON here. Current data will be replaced."
+    );
+    if (!raw) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+
+      // базова проверка
+      if (
+        typeof parsed !== "object" ||
+        !parsed ||
+        !Array.isArray(parsed.entries) ||
+        !parsed.settings
+      ) {
+        U.toast("Invalid backup format", "bad");
+        return;
+      }
+
+      // презаписваме текущото state
+      state.entries = Array.isArray(parsed.entries) ? parsed.entries : [];
+      state.costs = Array.isArray(parsed.costs) ? parsed.costs : [];
+      state.settings = Object.assign({}, state.settings, parsed.settings);
+
+      D.saveState(state);
+      syncSettingsToInputs();
+      renderAll();
+      U.toast("Backup restored", "good");
+    } catch (e) {
+      console.error(e);
+      U.toast("Import failed", "bad");
+    }
+  }
+
   // ---------- wiring ----------
 
   function wire() {
@@ -175,6 +233,8 @@
     $("c_add").addEventListener("click", onAddCost);
 
     $("savePrices").addEventListener("click", saveSettingsFromInputs);
+    $("exportBackup").addEventListener("click", exportBackup);
+    $("importBackup").addEventListener("click", importBackup);
 
     syncSettingsToInputs();
     wireTabs();
