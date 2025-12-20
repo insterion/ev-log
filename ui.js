@@ -67,8 +67,19 @@
       (s, e) => s + (e.kwh * e.price || 0),
       0
     );
+    const sessions = entries.length;
+
+    const summaryBlock = `
+      <p style="margin:4px 0 6px;font-size:0.85rem;color:#cccccc;">
+        Total so far:
+        <strong>${fmtNum(totalKwh, 1)} kWh</strong> •
+        <strong>${fmtGBP(totalCost)}</strong> •
+        <strong>${sessions}</strong> sessions
+      </p>
+    `;
 
     const html = `
+      ${summaryBlock}
       <table>
         <thead>
           <tr>
