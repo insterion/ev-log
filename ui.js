@@ -63,7 +63,10 @@
       });
 
     const totalKwh = entries.reduce((s, e) => s + (e.kwh || 0), 0);
-    const totalCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
+    const totalCost = entries.reduce(
+      (s, e) => s + (e.kwh * e.price || 0),
+      0
+    );
 
     const html = `
       <table>
@@ -105,19 +108,37 @@
       return;
     }
 
-    const rows = costs
+    const sorted = costs
       .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((c) => {
-        return `<tr>
-          <td>${fmtDate(c.date)}</td>
-          <td><span class="badge">${c.category}</span></td>
-          <td>${fmtGBP(c.amount)}</td>
-          <td>${c.note ? c.note.replace(/</g, "&lt;") : ""}</td>
-        </tr>`;
-      });
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-    const total = costs.reduce((s, c) => s + (c.amount || 0), 0);
+    const rows = sorted.map((c) => {
+      return `<tr>
+        <td>${fmtDate(c.date)}</td>
+        <td><span class="badge">${c.category}</span></td>
+        <td>${fmtGBP(c.amount)}</td>
+        <td>${c.note ? c.note.replace(/</g, "&lt;") : ""}</td>
+      </tr>`;
+    });
+
+    const total = sorted.reduce((s, c) => s + (c.amount || 0), 0);
+
+    // totals by category
+    const catMap = new Map();
+    for (const c of sorted) {
+      const key = c.category || "Other";
+      const prev = catMap.get(key) || 0;
+      catMap.set(key, prev + (c.amount || 0));
+    }
+
+    const catRows = Array.from(catMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(
+        ([cat, sum]) => `<tr>
+          <td>${cat}</td>
+          <td>${fmtGBP(sum)}</td>
+        </tr>`
+      );
 
     el.innerHTML = `
       <table>
@@ -140,6 +161,19 @@
             <td></td>
           </tr>
         </tfoot>
+      </table>
+
+      <h4 style="margin-top:10px;">Totals by category</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Total £</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${catRows.join("")}
+        </tbody>
       </table>
     `;
   }
@@ -165,7 +199,10 @@
     idLast.innerHTML = block(summary.lastMonth);
     idAvg.innerHTML = summary.avg
       ? `
-      <p>Avg kWh / month: <strong>${fmtNum(summary.avg.kwh, 1)}</strong></p>
+      <p>Avg kWh / month: <strong>${fmtNum(
+        summary.avg.kwh,
+        1
+      )}</strong></p>
       <p>Avg £ / month: <strong>${fmtGBP(summary.avg.cost)}</strong></p>
     `
       : "<p>No data.</p>";
@@ -186,14 +223,19 @@
     const sign = diff > 0 ? "saved" : "extra";
 
     el.innerHTML = `
-      <p>Total kWh (all time): <strong>${fmtNum(data.totalKwh, 1)}</strong></p>
+      <p>Total kWh (all time): <strong>${fmtNum(
+        data.totalKwh,
+        1
+      )}</strong></p>
       <p>Estimated miles (@ ${fmtNum(
         data.evMilesPerKwh,
         1
       )} mi/kWh): <strong>${fmtNum(data.miles, 0)}</strong></p>
       <p>EV cost: <strong>${fmtGBP(data.evCost)}</strong></p>
       <p>ICE cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
-      <p>Difference: <strong>${fmtGBP(Math.abs(diff))}</strong> (${sign})</p>
+      <p>Difference: <strong>${fmtGBP(
+        Math.abs(diff)
+      )}</strong> (${sign})</p>
       <p class="small">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
       2
