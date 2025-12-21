@@ -1,4 +1,4 @@
-// app.js – main wiring for EV Log (dev version)
+// app.js – main wiring for EV Log (dev version with "applies to" for costs)
 
 (function () {
   const D = window.EVData;
@@ -10,6 +10,24 @@
   const state = D.loadState();
   let currentEditId = null;      // charging entry id being edited
   let currentEditCostId = null;  // cost id being edited
+
+  // ---------- normalise existing costs (backwards compatibility) ----------
+
+  function ensureCostAppliesDefaults() {
+    if (!Array.isArray(state.costs)) return;
+    for (const c of state.costs) {
+      if (!c) continue;
+      if (!c.applies) {
+        // за старите записи по подразбиране – other,
+        // за да не ги броим нито чисто като EV, нито като ICE
+        c.applies = "other";
+      } else {
+        c.applies = String(c.applies).toLowerCase();
+      }
+    }
+  }
+
+  ensureCostAppliesDefaults();
 
   // ---------- tabs ----------
 
@@ -139,6 +157,16 @@
     $("c_amount").value = cost.amount;
     $("c_note").value = cost.note || "";
 
+    const appliesSelect = $("c_applies");
+    if (appliesSelect) {
+      const v = (cost.applies || "other").toLowerCase();
+      if (v === "ev" || v === "ice" || v === "both" || v === "other") {
+        appliesSelect.value = v;
+      } else {
+        appliesSelect.value = "other";
+      }
+    }
+
     const btn = $("c_add");
     if (btn) {
       btn.textContent = "Update cost";
@@ -147,20 +175,57 @@
     U.toast("Editing cost", "info");
   }
 
-  // ---------- maintenance total from Costs (all-time) ----------
+  function getAppliesFromForm() {
+    const el = $("c_applies");
+    if (!el) return "other";
+    const v = (el.value || "").toLowerCase();
+    if (v === "ev" || v === "ice" || v === "both" || v === "other") {
+      return v;
+    }
+    return "other";
+  }
 
-  function computeMaintenanceTotalAllTime() {
+  // ---------- maintenance totals (all-time, split EV/ICE) ----------
+
+  function computeMaintenanceTotals() {
     const costs = state.costs || [];
-    let total = 0;
+    let evOnly = 0;
+    let iceOnly = 0;
+    let both = 0;
+    let other = 0;
 
     for (const c of costs) {
       if (!c) continue;
       const amount = Number(c.amount ?? 0) || 0;
       if (!amount) continue;
-      total += amount;
+
+      const a = (c.applies || "other").toLowerCase();
+      if (a === "ev") {
+        evOnly += amount;
+      } else if (a === "ice") {
+        iceOnly += amount;
+      } else if (a === "both") {
+        both += amount;
+      } else {
+        other += amount;
+      }
     }
 
-    return total;
+    const ev = evOnly + both;
+    const ice = iceOnly + both;
+    const total = evOnly + iceOnly + both + other;
+
+    return {
+      ev,
+      ice,
+      both,
+      other,
+      total
+    };
+  }
+
+  function computeMaintenanceTotalAllTime() {
+    return computeMaintenanceTotals().total;
   }
 
   function renderMaintenanceTotalInCosts() {
@@ -168,7 +233,7 @@
       const container = $("costTable");
       if (!container) return;
 
-      const total = computeMaintenanceTotalAllTime();
+      const totals = computeMaintenanceTotals();
       let el = $("maintenanceTotalCosts");
       if (!el) {
         el = document.createElement("p");
@@ -180,8 +245,15 @@
         }
       }
 
+      const diff = totals.ev - totals.ice;
+
       el.textContent =
-        "Maintenance total (all time): " + U.fmtGBP(total);
+        "Maintenance totals (all time) – " +
+        "EV: " + U.fmtGBP(totals.ev) +
+        ", ICE: " + U.fmtGBP(totals.ice) +
+        ", Both: " + U.fmtGBP(totals.both) +
+        ", Other: " + U.fmtGBP(totals.other) +
+        ", Diff (EV–ICE): " + U.fmtGBP(diff);
     } catch (e) {
       console && console.warn && console.warn("renderMaintenanceTotalInCosts failed", e);
     }
@@ -192,7 +264,7 @@
       const container = $("compareStats");
       if (!container) return;
 
-      const total = computeMaintenanceTotalAllTime();
+      const totals = computeMaintenanceTotals();
       let el = $("maintenanceTotalCompare");
       if (!el) {
         el = document.createElement("p");
@@ -202,8 +274,15 @@
         container.appendChild(el);
       }
 
+      const diff = totals.ev - totals.ice;
+
       el.textContent =
-        "Maintenance (all time): " + U.fmtGBP(total);
+        "Maintenance (all time) – " +
+        "EV: " + U.fmtGBP(totals.ev) +
+        ", ICE: " + U.fmtGBP(totals.ice) +
+        ", Both: " + U.fmtGBP(totals.both) +
+        ", Other: " + U.fmtGBP(totals.other) +
+        ", Diff (EV–ICE): " + U.fmtGBP(diff);
     } catch (e) {
       console && console.warn && console.warn("renderMaintenanceTotalInCompare failed", e);
     }
@@ -224,7 +303,7 @@
     const cmp = C.buildCompare(state.entries, state.settings);
     U.renderCompare("compareStats", cmp);
 
-    // новото: maintenance total от Costs (all time)
+    // maintenance totals от Costs (all time)
     renderMaintenanceTotalInCosts();
     renderMaintenanceTotalInCompare();
   }
@@ -309,6 +388,7 @@
     const category = $("c_category").value;
     const amount = parseFloat($("c_amount").value);
     const note = $("c_note").value.trim();
+    const applies = getAppliesFromForm();
 
     if (isNaN(amount) || amount <= 0) {
       U.toast("Please enter amount", "bad");
@@ -324,7 +404,8 @@
         date,
         category,
         amount,
-        note
+        note,
+        applies
       };
 
       state.costs.push(cost);
@@ -344,6 +425,7 @@
       cost.category = category;
       cost.amount = amount;
       cost.note = note;
+      cost.applies = applies;
 
       D.saveState(state);
       renderAll();
@@ -501,7 +583,7 @@
       return;
     }
 
-    const header = ["Date", "Category", "Amount", "Note"];
+    const header = ["Date", "Category", "Amount", "Note", "AppliesTo"];
 
     const rows = state.costs
       .slice()
@@ -511,7 +593,8 @@
           csvEscape(c.date || ""),
           csvEscape(c.category || ""),
           csvEscape(c.amount != null ? c.amount : ""),
-          csvEscape(c.note || "")
+          csvEscape(c.note || ""),
+          csvEscape(c.applies || "other")
         ].join(",");
       });
 
@@ -593,6 +676,8 @@
       state.costs = Array.isArray(parsed.costs) ? parsed.costs : [];
       state.settings = Object.assign({}, state.settings, parsed.settings);
 
+      ensureCostAppliesDefaults();
+
       D.saveState(state);
       syncSettingsToInputs();
       renderAll();
@@ -610,6 +695,12 @@
   function wire() {
     $("date").value = todayISO();
     $("c_date").value = todayISO();
+
+    // по подразбиране OTHER за нови разходи (можеш да сменяш ръчно)
+    const appliesSelect = $("c_applies");
+    if (appliesSelect && !appliesSelect.value) {
+      appliesSelect.value = "other";
+    }
 
     $("addEntry").addEventListener("click", onAddEntry);
     $("sameAsLast").addEventListener("click", onSameAsLast);
