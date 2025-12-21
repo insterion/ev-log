@@ -152,9 +152,18 @@
     const rows = sorted.map((c) => {
       const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
       const idAttr = c.id ? String(c.id) : "";
+
+      const appliesRaw = (c.applies || "other").toLowerCase();
+      let appliesLabel = "Other";
+      if (appliesRaw === "ev") appliesLabel = "EV";
+      else if (appliesRaw === "ice") appliesLabel = "ICE";
+      else if (appliesRaw === "both") appliesLabel = "Both";
+      else appliesLabel = "Other";
+
       return `<tr>
         <td>${fmtDate(c.date)}</td>
         <td><span class="badge">${c.category}</span></td>
+        <td><span class="badge">${appliesLabel}</span></td>
         <td>${fmtGBP(c.amount)}</td>
         <td>${safeNote}</td>
         <td>
@@ -207,6 +216,7 @@
           <tr>
             <th>Date</th>
             <th>Category</th>
+            <th>For</th>
             <th>£</th>
             <th>Note</th>
             <th>Actions</th>
@@ -218,6 +228,7 @@
         <tfoot>
           <tr class="total-row">
             <td>Total</td>
+            <td></td>
             <td></td>
             <td>${fmtGBP(total)}</td>
             <td></td>
