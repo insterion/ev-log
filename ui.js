@@ -345,6 +345,51 @@
       extraLine = `<p>For your recorded EV miles, EV and ICE are roughly the same cost.</p>`;
     }
 
+    // ---- maintenance + all-in EV vs ICE ----
+    const maintEv = Number(data.maintEv ?? 0);
+    const maintIce = Number(data.maintIce ?? 0);
+    const maintBoth = Number(data.maintBoth ?? 0);
+    const maintOther = Number(data.maintOther ?? 0);
+
+    const evTotalAll = data.evCost + maintEv;
+    const iceTotalAll = data.iceCost + maintIce;
+    const diffAll = iceTotalAll - evTotalAll;
+
+    let maintBlock = "";
+    if (
+      maintEv !== 0 ||
+      maintIce !== 0 ||
+      maintBoth !== 0 ||
+      maintOther !== 0
+    ) {
+      let diffAllText = "about the same";
+      if (diffAll > 1) {
+        diffAllText = "ICE more expensive";
+      } else if (diffAll < -1) {
+        diffAllText = "EV more expensive";
+      }
+
+      maintBlock = `
+        <h4 style="margin-top:10px;">EV vs ICE including maintenance</h4>
+        <p>Maintenance – EV: <strong>${fmtGBP(
+          maintEv
+        )}</strong>, ICE: <strong>${fmtGBP(
+        maintIce
+      )}</strong>, Both: <strong>${fmtGBP(
+        maintBoth
+      )}</strong>, Other: <strong>${fmtGBP(maintOther)}</strong></p>
+        <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(
+          evTotalAll
+        )}</strong></p>
+        <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(
+          iceTotalAll
+        )}</strong></p>
+        <p>Difference (ICE – EV): <strong>${fmtGBP(
+          Math.abs(diffAll)
+        )}</strong> (${diffAllText})</p>
+      `;
+    }
+
     // блок за зарядното
     let chargerBlock = "";
     if (data.publicRate && data.publicRate > 0) {
@@ -415,6 +460,7 @@
         Math.abs(diff)
       )}</strong> (${sign})</p>
       ${extraLine}
+      ${maintBlock}
       ${chargerBlock}
       <p class="small">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
