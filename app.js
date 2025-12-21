@@ -1,4 +1,4 @@
-// app.js – main wiring
+// app.js – main wiring for EV Log (dev version)
 
 (function () {
   const D = window.EVData;
@@ -147,57 +147,32 @@
     U.toast("Editing cost", "info");
   }
 
-  // ---------- EV/ICE totals from Costs (all-time) ----------
+  // ---------- maintenance total from Costs (all-time) ----------
 
-  function computeEvIceCostTotalsAllTime() {
+  function computeMaintenanceTotalAllTime() {
     const costs = state.costs || [];
-    let ev = 0;
-    let ice = 0;
+    let total = 0;
 
     for (const c of costs) {
       if (!c) continue;
       const amount = Number(c.amount ?? 0) || 0;
       if (!amount) continue;
-
-      const appliesRaw = (
-        c.applies ||
-        c.appliesTo ||
-        c.apply ||
-        ""
-      )
-        .toString()
-        .toLowerCase()
-        .trim();
-
-      if (appliesRaw === "ev") {
-        ev += amount;
-      } else if (appliesRaw === "ice") {
-        ice += amount;
-      } else if (appliesRaw === "both") {
-        ev += amount / 2;
-        ice += amount / 2;
-      } else {
-        // ако няма applies – минава само в общия TOTAL, не в EV/ICE сравнение
-      }
+      total += amount;
     }
 
-    return {
-      ev,
-      ice,
-      diff: ev - ice
-    };
+    return total;
   }
 
-  function renderCostEvIceSummary() {
+  function renderMaintenanceTotalInCosts() {
     try {
       const container = $("costTable");
       if (!container) return;
 
-      const totals = computeEvIceCostTotalsAllTime();
-      let el = $("costsEvIceSummary");
+      const total = computeMaintenanceTotalAllTime();
+      let el = $("maintenanceTotalCosts");
       if (!el) {
         el = document.createElement("p");
-        el.id = "costsEvIceSummary";
+        el.id = "maintenanceTotalCosts";
         el.className = "small";
         el.style.marginTop = "6px";
         if (container.parentNode) {
@@ -206,41 +181,31 @@
       }
 
       el.textContent =
-        "EV costs (all time): " +
-        U.fmtGBP(totals.ev) +
-        " · ICE costs (all time): " +
-        U.fmtGBP(totals.ice) +
-        " · Diff (EV − ICE): " +
-        U.fmtGBP(totals.diff);
+        "Maintenance total (all time): " + U.fmtGBP(total);
     } catch (e) {
-      console && console.warn && console.warn("renderCostEvIceSummary failed", e);
+      console && console.warn && console.warn("renderMaintenanceTotalInCosts failed", e);
     }
   }
 
-  function renderCompareEvIceSummary() {
+  function renderMaintenanceTotalInCompare() {
     try {
       const container = $("compareStats");
       if (!container) return;
 
-      const totals = computeEvIceCostTotalsAllTime();
-      let el = $("compareCostsEvIce");
+      const total = computeMaintenanceTotalAllTime();
+      let el = $("maintenanceTotalCompare");
       if (!el) {
         el = document.createElement("p");
-        el.id = "compareCostsEvIce";
+        el.id = "maintenanceTotalCompare";
         el.className = "small";
         el.style.marginTop = "8px";
         container.appendChild(el);
       }
 
       el.textContent =
-        "Maintenance (all time) – EV: " +
-        U.fmtGBP(totals.ev) +
-        ", ICE: " +
-        U.fmtGBP(totals.ice) +
-        ", Diff (EV − ICE): " +
-        U.fmtGBP(totals.diff);
+        "Maintenance (all time): " + U.fmtGBP(total);
     } catch (e) {
-      console && console.warn && console.warn("renderCompareEvIceSummary failed", e);
+      console && console.warn && console.warn("renderMaintenanceTotalInCompare failed", e);
     }
   }
 
@@ -259,9 +224,9 @@
     const cmp = C.buildCompare(state.entries, state.settings);
     U.renderCompare("compareStats", cmp);
 
-    // новото: EV/ICE totals от Costs
-    renderCostEvIceSummary();
-    renderCompareEvIceSummary();
+    // новото: maintenance total от Costs (all time)
+    renderMaintenanceTotalInCosts();
+    renderMaintenanceTotalInCompare();
   }
 
   // ---------- add / update entry ----------
