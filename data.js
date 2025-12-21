@@ -70,6 +70,18 @@
     }
   }
 
+  // НОВО: гарантираме, че всеки разход има applies
+  // (ev | ice | both | other). За старите записи слагаме "other",
+  // за да не ги броим грешно в EV/ICE totals.
+  function ensureCostApplies(state) {
+    if (!state || !Array.isArray(state.costs)) return;
+    for (const c of state.costs) {
+      if (!c.applies) {
+        c.applies = "other";
+      }
+    }
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -86,12 +98,14 @@
       // гарантираме, че всички entries и costs имат id (за Edit/Delete)
       ensureEntryIds(state);
       ensureCostIds(state);
+      // НОВО: гаранция за applies при разходите
+      ensureCostApplies(state);
 
-      // по желание – записваме обратно, за да се запазят id-тата
+      // по желание – записваме обратно, за да се запазят id-тата и applies
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (e) {
-        console.warn("Could not persist migrated ids", e);
+        console.warn("Could not persist migrated ids/applies", e);
       }
 
       return state;
