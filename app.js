@@ -1,4 +1,4 @@
-// app.js – main wiring for EV Log (dev version with "applies to" for costs)
+// app.js – main wiring for EV Log (with "applies to" + EV/ICE maintenance)
 
 (function () {
   const D = window.EVData;
@@ -18,8 +18,7 @@
     for (const c of state.costs) {
       if (!c) continue;
       if (!c.applies) {
-        // за старите записи по подразбиране – other,
-        // за да не ги броим нито чисто като EV, нито като ICE
+        // старите записи по подразбиране – other
         c.applies = "other";
       } else {
         c.applies = String(c.applies).toLowerCase();
@@ -300,7 +299,14 @@
       summary
     );
 
+    // EV vs ICE compare (енергия) + добавяме поддръжка в data
     const cmp = C.buildCompare(state.entries, state.settings);
+    const mt = computeMaintenanceTotals();
+    cmp.maintEv = mt.ev;
+    cmp.maintIce = mt.ice;
+    cmp.maintBoth = mt.both;
+    cmp.maintOther = mt.other;
+
     U.renderCompare("compareStats", cmp);
 
     // maintenance totals от Costs (all time)
@@ -696,7 +702,7 @@
     $("date").value = todayISO();
     $("c_date").value = todayISO();
 
-    // по подразбиране OTHER за нови разходи (можеш да сменяш ръчно)
+    // по подразбиране OTHER за нови разходи
     const appliesSelect = $("c_applies");
     if (appliesSelect && !appliesSelect.value) {
       appliesSelect.value = "other";
