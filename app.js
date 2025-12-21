@@ -147,6 +147,103 @@
     U.toast("Editing cost", "info");
   }
 
+  // ---------- EV/ICE totals from Costs (all-time) ----------
+
+  function computeEvIceCostTotalsAllTime() {
+    const costs = state.costs || [];
+    let ev = 0;
+    let ice = 0;
+
+    for (const c of costs) {
+      if (!c) continue;
+      const amount = Number(c.amount ?? 0) || 0;
+      if (!amount) continue;
+
+      const appliesRaw = (
+        c.applies ||
+        c.appliesTo ||
+        c.apply ||
+        ""
+      )
+        .toString()
+        .toLowerCase()
+        .trim();
+
+      if (appliesRaw === "ev") {
+        ev += amount;
+      } else if (appliesRaw === "ice") {
+        ice += amount;
+      } else if (appliesRaw === "both") {
+        ev += amount / 2;
+        ice += amount / 2;
+      } else {
+        // ако няма applies – минава само в общия TOTAL, не в EV/ICE сравнение
+      }
+    }
+
+    return {
+      ev,
+      ice,
+      diff: ev - ice
+    };
+  }
+
+  function renderCostEvIceSummary() {
+    try {
+      const container = $("costTable");
+      if (!container) return;
+
+      const totals = computeEvIceCostTotalsAllTime();
+      let el = $("costsEvIceSummary");
+      if (!el) {
+        el = document.createElement("p");
+        el.id = "costsEvIceSummary";
+        el.className = "small";
+        el.style.marginTop = "6px";
+        if (container.parentNode) {
+          container.parentNode.insertBefore(el, container.nextSibling);
+        }
+      }
+
+      el.textContent =
+        "EV costs (all time): " +
+        U.fmtGBP(totals.ev) +
+        " · ICE costs (all time): " +
+        U.fmtGBP(totals.ice) +
+        " · Diff (EV − ICE): " +
+        U.fmtGBP(totals.diff);
+    } catch (e) {
+      console && console.warn && console.warn("renderCostEvIceSummary failed", e);
+    }
+  }
+
+  function renderCompareEvIceSummary() {
+    try {
+      const container = $("compareStats");
+      if (!container) return;
+
+      const totals = computeEvIceCostTotalsAllTime();
+      let el = $("compareCostsEvIce");
+      if (!el) {
+        el = document.createElement("p");
+        el.id = "compareCostsEvIce";
+        el.className = "small";
+        el.style.marginTop = "8px";
+        container.appendChild(el);
+      }
+
+      el.textContent =
+        "Maintenance (all time) – EV: " +
+        U.fmtGBP(totals.ev) +
+        ", ICE: " +
+        U.fmtGBP(totals.ice) +
+        ", Diff (EV − ICE): " +
+        U.fmtGBP(totals.diff);
+    } catch (e) {
+      console && console.warn && console.warn("renderCompareEvIceSummary failed", e);
+    }
+  }
+
   // ---------- rendering ----------
 
   function renderAll() {
@@ -161,6 +258,10 @@
 
     const cmp = C.buildCompare(state.entries, state.settings);
     U.renderCompare("compareStats", cmp);
+
+    // новото: EV/ICE totals от Costs
+    renderCostEvIceSummary();
+    renderCompareEvIceSummary();
   }
 
   // ---------- add / update entry ----------
@@ -489,7 +590,7 @@
     try {
       const backup = JSON.stringify(state);
       if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(backup);
+        await navigator.clipboard.writeText(backup);
         U.toast("Backup copied to clipboard", "good");
       } else {
         const ok = window.prompt("Backup JSON (copy this):", backup);
