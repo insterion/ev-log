@@ -210,6 +210,16 @@
         </tr>`
       );
 
+    const legend = `
+      <p class="small" style="margin-top:8px;line-height:1.35;">
+        <strong>For</strong> means which vehicle the cost applies to:
+        <strong>EV</strong> = electric car only,
+        <strong>ICE</strong> = petrol/diesel car only,
+        <strong>Both</strong> = shared/combined cost,
+        <strong>Other</strong> = not tied to a specific car.
+      </p>
+    `;
+
     el.innerHTML = `
       <table>
         <thead>
@@ -249,6 +259,8 @@
           ${catRows.join("")}
         </tbody>
       </table>
+
+      ${legend}
     `;
   }
 
@@ -324,13 +336,9 @@
 
     const miles = data.miles || 0;
     const evPerMile =
-      miles > 0
-        ? data.evPerMile ?? data.evCost / miles
-        : 0;
+      miles > 0 ? data.evPerMile ?? data.evCost / miles : 0;
     const icePerMile =
-      miles > 0
-        ? data.icePerMile ?? data.iceCost / miles
-        : 0;
+      miles > 0 ? data.icePerMile ?? data.iceCost / miles : 0;
 
     let extraLine = "";
     if (diff > 1) {
@@ -363,18 +371,12 @@
       const per1000Diff = per1000Ice - per1000Ev;
 
       let perText = "about the same per 1000 miles";
-      if (per1000Diff > 1) {
-        perText = "ICE more expensive per 1000 miles";
-      } else if (per1000Diff < -1) {
-        perText = "EV more expensive per 1000 miles";
-      }
+      if (per1000Diff > 1) perText = "ICE more expensive per 1000 miles";
+      else if (per1000Diff < -1) perText = "EV more expensive per 1000 miles";
 
       let allText = "about the same overall";
-      if (diffAll > 1) {
-        allText = "ICE more expensive overall";
-      } else if (diffAll < -1) {
-        allText = "EV more expensive overall";
-      }
+      if (diffAll > 1) allText = "ICE more expensive overall";
+      else if (diffAll < -1) allText = "EV more expensive overall";
 
       topSummary = `
         <div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:#111;">
@@ -396,18 +398,10 @@
     }
 
     let maintBlock = "";
-    if (
-      maintEv !== 0 ||
-      maintIce !== 0 ||
-      maintBoth !== 0 ||
-      maintOther !== 0
-    ) {
+    if (maintEv !== 0 || maintIce !== 0 || maintBoth !== 0 || maintOther !== 0) {
       let diffAllText = "about the same";
-      if (diffAll > 1) {
-        diffAllText = "ICE more expensive";
-      } else if (diffAll < -1) {
-        diffAllText = "EV more expensive";
-      }
+      if (diffAll > 1) diffAllText = "ICE more expensive";
+      else if (diffAll < -1) diffAllText = "EV more expensive";
 
       maintBlock = `
         <h4 style="margin-top:10px;">EV vs ICE including maintenance</h4>
@@ -437,23 +431,13 @@
     const insOther = Number(data.insuranceOther ?? 0);
     const insTotal = Number(data.insuranceTotal ?? 0);
 
-    const insEvAll = insEv;
-    const insIceAll = insIce;
-    const insDiff = insIceAll - insEvAll;
+    const insDiff = insIce - insEv;
 
     let insuranceBlock = "";
-    if (
-      insEv !== 0 ||
-      insIce !== 0 ||
-      insBoth !== 0 ||
-      insOther !== 0
-    ) {
+    if (insEv !== 0 || insIce !== 0 || insBoth !== 0 || insOther !== 0) {
       let insDiffText = "about the same";
-      if (insDiff > 1) {
-        insDiffText = "ICE insurance higher";
-      } else if (insDiff < -1) {
-        insDiffText = "EV insurance higher";
-      }
+      if (insDiff > 1) insDiffText = "ICE insurance higher";
+      else if (insDiff < -1) insDiffText = "EV insurance higher";
 
       insuranceBlock = `
         <h4 style="margin-top:10px;">Insurance EV vs ICE</h4>
@@ -480,9 +464,7 @@
       const saved = data.savedVsPublic ?? 0;
       const invest = data.chargerInvestment ?? 0;
       const remaining =
-        typeof data.remainingToRecover === "number"
-          ? data.remainingToRecover
-          : null;
+        typeof data.remainingToRecover === "number" ? data.remainingToRecover : null;
 
       chargerBlock += `<h4 style="margin-top:10px;">Home charger payoff</h4>`;
       chargerBlock += `<p>If all your EV kWh were at public price (£${pr.toFixed(
@@ -494,15 +476,13 @@
 
       const savedAbs = Math.abs(saved);
       if (saved > 1) {
-        chargerBlock += `<p>Saved vs all-public: <strong>${fmtGBP(
-          saved
-        )}</strong>.</p>`;
+        chargerBlock += `<p>Saved vs all-public: <strong>${fmtGBP(saved)}</strong>.</p>`;
       } else if (saved < -1) {
         chargerBlock += `<p>Extra vs all-public: <strong>${fmtGBP(
           savedAbs
         )}</strong> (your effective price is higher than public benchmark).</p>`;
       } else {
-        chargerBlock += `<p>Almost no difference vs all-public price.</p>`;
+        chargerBlock += `<pAlmost no difference vs all-public price.</p>`;
       }
 
       if (invest > 0 && remaining !== null) {
@@ -539,9 +519,7 @@
       <p>ICE cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
       <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
       <p>ICE £/mile: <strong>£${icePerMile.toFixed(3)}</strong></p>
-      <p>Difference: <strong>${fmtGBP(
-        Math.abs(diff)
-      )}</strong> (${sign})</p>
+      <p>Difference: <strong>${fmtGBP(Math.abs(diff))}</strong> (${sign})</p>
       ${extraLine}
       ${maintBlock}
       ${insuranceBlock}
