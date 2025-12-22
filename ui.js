@@ -259,7 +259,7 @@
     `;
   }
 
-  // ------- render summary -------
+  // ------- render summary (COMPACT + COLLAPSIBLE) -------
 
   function renderSummary(containerIds, summary) {
     const [idThis, idLast, idAvg] = containerIds.map((id) =>
@@ -267,43 +267,71 @@
     );
     if (!idThis || !idLast || !idAvg) return;
 
-    function block(data) {
+    function compactLines(data) {
       if (!data) return "<p>No data.</p>";
 
-      const avgPriceLine =
+      const kwh = fmtNum(data.kwh, 1);
+      const cost = fmtGBP(data.cost);
+      const count = data.count != null ? data.count : null;
+
+      const avgPrice =
         data.avgPrice && data.avgPrice > 0
-          ? `<p>Avg price: <strong>£${data.avgPrice.toFixed(3)}</strong> / kWh</p>`
-          : "";
+          ? `£${data.avgPrice.toFixed(3)}/kWh`
+          : null;
 
-      const perDayLine =
-        data.perDay && data.perDay > 0
-          ? `<p>~ <strong>${fmtGBP(data.perDay)}</strong> / day (calendar)</p>`
-          : "";
-
-      const sessionsLine =
-        data.count != null ? `<p>Sessions: <strong>${data.count}</strong></p>` : "";
+      const perDay =
+        data.perDay && data.perDay > 0 ? fmtGBP(data.perDay) + "/day" : null;
 
       return `
-        <p>kWh: <strong>${fmtNum(data.kwh, 1)}</strong></p>
-        <p>Cost: <strong>${fmtGBP(data.cost)}</strong></p>
-        ${sessionsLine}
-        ${avgPriceLine}
-        ${perDayLine}
+        <p style="margin:0 0 4px;">
+          <strong>${kwh} kWh</strong> • <strong>${cost}</strong>
+          ${count != null ? ` • <strong>${count}</strong> sessions` : ""}
+        </p>
+        <p class="small" style="margin:0;">
+          ${avgPrice ? `Avg: <strong>${avgPrice}</strong>` : "Avg: n/a"}
+          ${perDay ? ` • ~ <strong>${perDay}</strong>` : ""}
+        </p>
       `;
     }
 
-    idThis.innerHTML = block(summary.thisMonth);
-    idLast.innerHTML = block(summary.lastMonth);
+    idThis.innerHTML = `
+      <details open>
+        <summary style="cursor:pointer;"><strong>This month</strong></summary>
+        <div style="margin-top:6px;">
+          ${compactLines(summary.thisMonth)}
+        </div>
+      </details>
+    `;
 
-    idAvg.innerHTML = summary.avg
-      ? `
-      <p>Avg kWh / month: <strong>${fmtNum(summary.avg.kwh, 1)}</strong></p>
-      <p>Avg £ / month: <strong>${fmtGBP(summary.avg.cost)}</strong></p>
-      <p>Avg price (all months): <strong>£${summary.avg.avgPrice.toFixed(
-        3
-      )}</strong> / kWh</p>
-    `
-      : "<p>No data.</p>";
+    idLast.innerHTML = `
+      <details>
+        <summary style="cursor:pointer;"><strong>Last month</strong></summary>
+        <div style="margin-top:6px;">
+          ${compactLines(summary.lastMonth)}
+        </div>
+      </details>
+    `;
+
+    idAvg.innerHTML = `
+      <details>
+        <summary style="cursor:pointer;"><strong>Average (all months)</strong></summary>
+        <div style="margin-top:6px;">
+          ${
+            summary.avg
+              ? `
+                <p style="margin:0 0 4px;">
+                  <strong>${fmtNum(summary.avg.kwh, 1)} kWh</strong> •
+                  <strong>${fmtGBP(summary.avg.cost)}</strong>
+                </p>
+                <p class="small" style="margin:0;">
+                  Avg price: <strong>£${summary.avg.avgPrice.toFixed(3)}</strong> / kWh
+                </p>
+              `
+              : "<p>No data.</p>"
+          }
+        </div>
+      </details>
+    `;
   }
 
   // ------- render compare (CLEAN + COLLAPSIBLE) -------
