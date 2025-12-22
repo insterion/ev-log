@@ -265,7 +265,6 @@
         </tfoot>
       </table>
 
-      <!-- CHANGED: removed "open" so it's collapsed by default -->
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Totals by For</strong></summary>
         <div style="margin-top:6px;">
@@ -280,6 +279,7 @@
         </div>
       </details>
 
+      <!-- CHANGED: removed "open" so it's collapsed by default -->
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
         <div style="margin-top:6px;">
