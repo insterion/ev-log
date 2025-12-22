@@ -90,7 +90,7 @@
     const totalCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
     const sessions = entries.length;
 
-    // NEW: collapsible "Total so far" (phone-friendly)
+    // Collapsible "Total so far" (phone-friendly)
     const summaryBlock = `
       <details open style="margin:4px 0 8px;">
         <summary style="cursor:pointer;color:#cccccc;">
@@ -375,7 +375,7 @@
     `;
   }
 
-  // ------- render compare (CLEAN + COLLAPSIBLE) -------
+  // ------- render compare (CLEAN + COLLAPSIBLE + Assumptions collapsible) -------
 
   function renderCompare(containerId, data) {
     const el = document.getElementById(containerId);
@@ -430,9 +430,7 @@
         <div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:#111;">
           <p style="margin:0 0 4px;"><strong>Quick summary</strong></p>
           <p style="margin:0 0 3px;">
-            All-in difference (ICE – EV): <strong>${fmtGBP(
-              Math.abs(diffAll)
-            )}</strong> (${allText})
+            All-in difference (ICE – EV): <strong>${fmtGBP(Math.abs(diffAll))}</strong> (${allText})
           </p>
           <p style="margin:0;">
             Per 1000 miles: EV <strong>${fmtGBP(per1000Ev)}</strong>, ICE <strong>${fmtGBP(
@@ -446,9 +444,7 @@
     // ---- Energy explanation (short) ----
     let energyExplain = "";
     if (diffEnergy > 1) {
-      energyExplain = `ICE would cost <strong>${fmtGBP(
-        diffEnergy
-      )}</strong> more for your recorded EV miles.`;
+      energyExplain = `ICE would cost <strong>${fmtGBP(diffEnergy)}</strong> more for your recorded EV miles.`;
     } else if (diffEnergy < -1) {
       energyExplain = `EV would cost <strong>${fmtGBP(
         Math.abs(diffEnergy)
@@ -494,9 +490,7 @@
       )}</strong></p>
             <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(evTotalAll)}</strong></p>
             <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(iceTotalAll)}</strong></p>
-            <p>All-in difference (ICE – EV): <strong>${fmtGBP(
-              Math.abs(diffAll)
-            )}</strong></p>
+            <p>All-in difference (ICE – EV): <strong>${fmtGBP(Math.abs(diffAll))}</strong></p>
             <p>${diffAllText}</p>
           </div>
         </details>
@@ -569,17 +563,28 @@
       `;
     }
 
+    // NEW: assumptions collapsible (keeps screen clean on phone)
+    const assumptionsBlock = `
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;"><strong>Assumptions</strong></summary>
+        <div style="margin-top:6px;">
+          <p class="small" style="margin:0;">
+            ICE <strong>${data.iceMpg}</strong> mpg, £<strong>${data.icePerLitre.toFixed(
+      2
+    )}</strong>/litre unleaded,
+            EV <strong>${fmtNum(data.evMilesPerKwh, 1)}</strong> mi/kWh.
+          </p>
+        </div>
+      </details>
+    `;
+
     el.innerHTML = `
       ${topSummary}
       ${energyBlock}
       ${maintBlock}
       ${insuranceBlock}
       ${chargerBlock}
-      <p class="small" style="margin-top:10px;">
-        Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
-          2
-        )}/litre unleaded, EV ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh.
-      </p>
+      ${assumptionsBlock}
     `;
   }
 
