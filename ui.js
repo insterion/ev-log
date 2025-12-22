@@ -90,13 +90,20 @@
     const totalCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
     const sessions = entries.length;
 
+    // NEW: collapsible "Total so far" (phone-friendly)
     const summaryBlock = `
-      <p style="margin:4px 0 6px;font-size:0.85rem;color:#cccccc;">
-        Total so far:
-        <strong>${fmtNum(totalKwh, 1)} kWh</strong> •
-        <strong>${fmtGBP(totalCost)}</strong> •
-        <strong>${sessions}</strong> sessions
-      </p>
+      <details open style="margin:4px 0 8px;">
+        <summary style="cursor:pointer;color:#cccccc;">
+          <strong>Total so far</strong>
+        </summary>
+        <div style="margin-top:6px;font-size:0.85rem;color:#cccccc;">
+          <p style="margin:0;">
+            <strong>${fmtNum(totalKwh, 1)} kWh</strong> •
+            <strong>${fmtGBP(totalCost)}</strong> •
+            <strong>${sessions}</strong> sessions
+          </p>
+        </div>
+      </details>
     `;
 
     const html = `
@@ -131,7 +138,7 @@
     el.innerHTML = html;
   }
 
-  // ------- render costs (UPDATED: breakdown + collapsible totals) -------
+  // ------- render costs (with breakdown + collapsible totals) -------
 
   function renderCostTable(containerId, costs) {
     const el = document.getElementById(containerId);
@@ -489,7 +496,8 @@
             <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(iceTotalAll)}</strong></p>
             <p>All-in difference (ICE – EV): <strong>${fmtGBP(
               Math.abs(diffAll)
-            )}</strong> (${diffAllText})</p>
+            )}</strong></p>
+            <p>${diffAllText}</p>
           </div>
         </details>
       `;
@@ -512,9 +520,8 @@
         insOther
       )}</strong></p>
             <p>Total insurance: <strong>${fmtGBP(insTotal)}</strong></p>
-            <p>Difference (ICE – EV): <strong>${fmtGBP(
-              Math.abs(insDiff)
-            )}</strong> (${insDiffText})</p>
+            <p>Difference (ICE – EV): <strong>${fmtGBP(Math.abs(insDiff))}</strong></p>
+            <p>${insDiffText}</p>
           </div>
         </details>
       `;
