@@ -390,6 +390,48 @@
       `;
     }
 
+    // ---- insurance breakdown ----
+    const insEv = Number(data.insuranceEv ?? 0);
+    const insIce = Number(data.insuranceIce ?? 0);
+    const insBoth = Number(data.insuranceBoth ?? 0);
+    const insOther = Number(data.insuranceOther ?? 0);
+    const insTotal = Number(data.insuranceTotal ?? 0);
+
+    const insEvAll = insEv;
+    const insIceAll = insIce;
+    const insDiff = insIceAll - insEvAll;
+
+    let insuranceBlock = "";
+    if (
+      insEv !== 0 ||
+      insIce !== 0 ||
+      insBoth !== 0 ||
+      insOther !== 0
+    ) {
+      let insDiffText = "about the same";
+      if (insDiff > 1) {
+        insDiffText = "ICE insurance higher";
+      } else if (insDiff < -1) {
+        insDiffText = "EV insurance higher";
+      }
+
+      insuranceBlock = `
+        <h4 style="margin-top:10px;">Insurance EV vs ICE</h4>
+        <p>Insurance – EV: <strong>${fmtGBP(
+          insEv
+        )}</strong>, ICE: <strong>${fmtGBP(
+        insIce
+      )}</strong>, Both: <strong>${fmtGBP(
+        insBoth
+      )}</strong>, Other: <strong>${fmtGBP(insOther)}</strong>, Total: <strong>${fmtGBP(
+        insTotal
+      )}</strong></p>
+        <p>Difference (ICE – EV): <strong>${fmtGBP(
+          Math.abs(insDiff)
+        )}</strong> (${insDiffText})</p>
+      `;
+    }
+
     // блок за зарядното
     let chargerBlock = "";
     if (data.publicRate && data.publicRate > 0) {
@@ -461,6 +503,7 @@
       )}</strong> (${sign})</p>
       ${extraLine}
       ${maintBlock}
+      ${insuranceBlock}
       ${chargerBlock}
       <p class="small">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
