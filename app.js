@@ -1,4 +1,4 @@
-// app.js – main wiring for EV Log (with "applies to" + EV/ICE maintenance)
+// app.js – main wiring for EV Log (with "applies to" + EV/ICE maintenance + Costs filter)
 
 (function () {
   const D = window.EVData;
@@ -18,7 +18,7 @@
     for (const c of state.costs) {
       if (!c) continue;
       if (!c.applies) {
-        // старите записи по подразбиране – other
+        // старите записи по подразбиране – other (може да смениш на "ev" ако искаш)
         c.applies = "other";
       } else {
         c.applies = String(c.applies).toLowerCase();
@@ -287,11 +287,79 @@
     }
   }
 
+  // ---------- costs filter controls (UI) ----------
+
+  function ensureCostFilterControls() {
+    // ако вече има select – не правим нищо
+    if ($("c_filter_applies")) return;
+
+    const container = $("costTable");
+    if (!container || !container.parentNode) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.gap = "6px";
+    wrapper.style.marginBottom = "6px";
+
+    const label = document.createElement("label");
+    label.setAttribute("for", "c_filter_applies");
+    label.textContent = "Filter:";
+
+    const select = document.createElement("select");
+    select.id = "c_filter_applies";
+
+    const options = [
+      ["all", "All"],
+      ["ev", "EV only"],
+      ["ice", "ICE only"],
+      ["both", "Both"],
+      ["other", "Other"]
+    ];
+
+    options.forEach(([val, text]) => {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = text;
+      select.appendChild(opt);
+    });
+
+    select.addEventListener("change", () => {
+      renderAll();
+    });
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(select);
+
+    container.parentNode.insertBefore(wrapper, container);
+  }
+
+  function getCostFilterValue() {
+    const sel = $("c_filter_applies");
+    if (!sel) return "all";
+    const v = (sel.value || "all").toLowerCase();
+    if (v === "ev" || v === "ice" || v === "both" || v === "other" || v === "all") {
+      return v;
+    }
+    return "all";
+  }
+
   // ---------- rendering ----------
 
   function renderAll() {
     U.renderLogTable("logTable", state.entries);
-    U.renderCostTable("costTable", state.costs);
+
+    // филтрирани разходи за таблицата (Totals / Compare вървят по всички costs)
+    let costsToRender = state.costs;
+    const filter = getCostFilterValue();
+    if (filter !== "all") {
+      costsToRender = (state.costs || []).filter((c) => {
+        const a = (c.applies || "other").toLowerCase();
+        return a === filter;
+      });
+    }
+
+    U.renderCostTable("costTable", costsToRender);
 
     const summary = C.buildSummary(state.entries);
     U.renderSummary(
@@ -309,7 +377,7 @@
 
     U.renderCompare("compareStats", cmp);
 
-    // maintenance totals от Costs (all time)
+    // maintenance totals от Costs (all time) – винаги за всички costs
     renderMaintenanceTotalInCosts();
     renderMaintenanceTotalInCompare();
   }
@@ -729,6 +797,7 @@
 
     syncSettingsToInputs();
     wireTabs();
+    ensureCostFilterControls();
     renderAll();
     ensureExportButtons();
     resetEditMode();
