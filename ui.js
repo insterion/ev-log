@@ -87,10 +87,7 @@
       });
 
     const totalKwh = entries.reduce((s, e) => s + (e.kwh || 0), 0);
-    const totalCost = entries.reduce(
-      (s, e) => s + (e.kwh * e.price || 0),
-      0
-    );
+    const totalCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
     const sessions = entries.length;
 
     const summaryBlock = `
@@ -145,9 +142,7 @@
       return;
     }
 
-    const sorted = costs
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = costs.slice().sort((a, b) => a.date.localeCompare(b.date));
 
     const rows = sorted.map((c) => {
       const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
@@ -277,22 +272,16 @@
 
       const avgPriceLine =
         data.avgPrice && data.avgPrice > 0
-          ? `<p>Avg price: <strong>£${data.avgPrice.toFixed(
-              3
-            )}</strong> / kWh</p>`
+          ? `<p>Avg price: <strong>£${data.avgPrice.toFixed(3)}</strong> / kWh</p>`
           : "";
 
       const perDayLine =
         data.perDay && data.perDay > 0
-          ? `<p>~ <strong>${fmtGBP(
-              data.perDay
-            )}</strong> / day (calendar)</p>`
+          ? `<p>~ <strong>${fmtGBP(data.perDay)}</strong> / day (calendar)</p>`
           : "";
 
       const sessionsLine =
-        data.count != null
-          ? `<p>Sessions: <strong>${data.count}</strong></p>`
-          : "";
+        data.count != null ? `<p>Sessions: <strong>${data.count}</strong></p>` : "";
 
       return `
         <p>kWh: <strong>${fmtNum(data.kwh, 1)}</strong></p>
@@ -308,10 +297,7 @@
 
     idAvg.innerHTML = summary.avg
       ? `
-      <p>Avg kWh / month: <strong>${fmtNum(
-        summary.avg.kwh,
-        1
-      )}</strong></p>
+      <p>Avg kWh / month: <strong>${fmtNum(summary.avg.kwh, 1)}</strong></p>
       <p>Avg £ / month: <strong>${fmtGBP(summary.avg.cost)}</strong></p>
       <p>Avg price (all months): <strong>£${summary.avg.avgPrice.toFixed(
         3
@@ -320,7 +306,7 @@
       : "<p>No data.</p>";
   }
 
-  // ------- render compare -------
+  // ------- render compare (CLEAN + COLLAPSIBLE) -------
 
   function renderCompare(containerId, data) {
     const el = document.getElementById(containerId);
@@ -331,29 +317,14 @@
       return;
     }
 
-    const diff = data.iceCost - data.evCost;
-    const sign = diff > 0 ? "saved" : "extra";
-
     const miles = data.miles || 0;
-    const evPerMile =
-      miles > 0 ? data.evPerMile ?? data.evCost / miles : 0;
-    const icePerMile =
-      miles > 0 ? data.icePerMile ?? data.iceCost / miles : 0;
 
-    let extraLine = "";
-    if (diff > 1) {
-      extraLine = `<p>For your recorded EV miles, ICE would cost <strong>${fmtGBP(
-        diff
-      )}</strong> more.</p>`;
-    } else if (diff < -1) {
-      extraLine = `<p>For your recorded EV miles, EV would cost <strong>${fmtGBP(
-        Math.abs(diff)
-      )}</strong> more than ICE (check prices/assumptions).</p>`;
-    } else {
-      extraLine = `<p>For your recorded EV miles, EV and ICE are roughly the same cost.</p>`;
-    }
+    const evPerMile = miles > 0 ? data.evPerMile ?? data.evCost / miles : 0;
+    const icePerMile = miles > 0 ? data.icePerMile ?? data.iceCost / miles : 0;
 
-    // ---- maintenance + all-in EV vs ICE ----
+    const diffEnergy = data.iceCost - data.evCost;
+
+    // maintenance / all-in
     const maintEv = Number(data.maintEv ?? 0);
     const maintIce = Number(data.maintIce ?? 0);
     const maintBoth = Number(data.maintBoth ?? 0);
@@ -363,7 +334,15 @@
     const iceTotalAll = data.iceCost + maintIce;
     const diffAll = iceTotalAll - evTotalAll;
 
-    // ---- quick summary блок ----
+    // insurance
+    const insEv = Number(data.insuranceEv ?? 0);
+    const insIce = Number(data.insuranceIce ?? 0);
+    const insBoth = Number(data.insuranceBoth ?? 0);
+    const insOther = Number(data.insuranceOther ?? 0);
+    const insTotal = Number(data.insuranceTotal ?? 0);
+    const insDiff = insIce - insEv;
+
+    // ---- Quick summary (always visible) ----
     let topSummary = "";
     if (miles > 0) {
       const per1000Ev = evPerMile * 1000;
@@ -387,15 +366,46 @@
             )}</strong> (${allText})
           </p>
           <p style="margin:0;">
-            Per 1000 miles: EV <strong>${fmtGBP(
-              per1000Ev
-            )}</strong>, ICE <strong>${fmtGBP(
+            Per 1000 miles: EV <strong>${fmtGBP(per1000Ev)}</strong>, ICE <strong>${fmtGBP(
         per1000Ice
       )}</strong> (${perText})
           </p>
         </div>
       `;
     }
+
+    // ---- Energy explanation (short) ----
+    let energyExplain = "";
+    if (diffEnergy > 1) {
+      energyExplain = `ICE would cost <strong>${fmtGBP(
+        diffEnergy
+      )}</strong> more for your recorded EV miles.`;
+    } else if (diffEnergy < -1) {
+      energyExplain = `EV would cost <strong>${fmtGBP(
+        Math.abs(diffEnergy)
+      )}</strong> more than ICE (check assumptions).`;
+    } else {
+      energyExplain = `EV and ICE are roughly the same cost for your recorded EV miles.`;
+    }
+
+    const energyBlock = `
+      <details open>
+        <summary style="cursor:pointer;"><strong>Energy vs ICE (details)</strong></summary>
+        <div style="margin-top:6px;">
+          <p>Total kWh (all time): <strong>${fmtNum(data.totalKwh, 1)}</strong></p>
+          <p>Estimated miles (@ ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh): <strong>${fmtNum(
+      miles,
+      0
+    )}</strong></p>
+          <p>EV energy cost: <strong>${fmtGBP(data.evCost)}</strong></p>
+          <p>ICE fuel cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
+          <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
+          <p>ICE £/mile: <strong>£${icePerMile.toFixed(3)}</strong></p>
+          <p>Difference (ICE – EV): <strong>${fmtGBP(Math.abs(diffEnergy))}</strong></p>
+          <p>${energyExplain}</p>
+        </div>
+      </details>
+    `;
 
     let maintBlock = "";
     if (maintEv !== 0 || maintIce !== 0 || maintBoth !== 0 || maintOther !== 0) {
@@ -404,34 +414,24 @@
       else if (diffAll < -1) diffAllText = "EV more expensive";
 
       maintBlock = `
-        <h4 style="margin-top:10px;">EV vs ICE including maintenance</h4>
-        <p>Maintenance – EV: <strong>${fmtGBP(
-          maintEv
-        )}</strong>, ICE: <strong>${fmtGBP(
+        <details>
+          <summary style="cursor:pointer;"><strong>Maintenance (details)</strong></summary>
+          <div style="margin-top:6px;">
+            <p>Maintenance – EV: <strong>${fmtGBP(maintEv)}</strong>, ICE: <strong>${fmtGBP(
         maintIce
-      )}</strong>, Both: <strong>${fmtGBP(
-        maintBoth
-      )}</strong>, Other: <strong>${fmtGBP(maintOther)}</strong></p>
-        <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(
-          evTotalAll
-        )}</strong></p>
-        <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(
-          iceTotalAll
-        )}</strong></p>
-        <p>Difference (ICE – EV): <strong>${fmtGBP(
-          Math.abs(diffAll)
-        )}</strong> (${diffAllText})</p>
+      )}</strong></p>
+            <p>Shared (Both): <strong>${fmtGBP(maintBoth)}</strong>, Other: <strong>${fmtGBP(
+        maintOther
+      )}</strong></p>
+            <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(evTotalAll)}</strong></p>
+            <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(iceTotalAll)}</strong></p>
+            <p>All-in difference (ICE – EV): <strong>${fmtGBP(
+              Math.abs(diffAll)
+            )}</strong> (${diffAllText})</p>
+          </div>
+        </details>
       `;
     }
-
-    // ---- insurance breakdown ----
-    const insEv = Number(data.insuranceEv ?? 0);
-    const insIce = Number(data.insuranceIce ?? 0);
-    const insBoth = Number(data.insuranceBoth ?? 0);
-    const insOther = Number(data.insuranceOther ?? 0);
-    const insTotal = Number(data.insuranceTotal ?? 0);
-
-    const insDiff = insIce - insEv;
 
     let insuranceBlock = "";
     if (insEv !== 0 || insIce !== 0 || insBoth !== 0 || insOther !== 0) {
@@ -440,23 +440,24 @@
       else if (insDiff < -1) insDiffText = "EV insurance higher";
 
       insuranceBlock = `
-        <h4 style="margin-top:10px;">Insurance EV vs ICE</h4>
-        <p>Insurance – EV: <strong>${fmtGBP(
-          insEv
-        )}</strong>, ICE: <strong>${fmtGBP(
+        <details>
+          <summary style="cursor:pointer;"><strong>Insurance (details)</strong></summary>
+          <div style="margin-top:6px;">
+            <p>Insurance – EV: <strong>${fmtGBP(insEv)}</strong>, ICE: <strong>${fmtGBP(
         insIce
-      )}</strong>, Both: <strong>${fmtGBP(
-        insBoth
-      )}</strong>, Other: <strong>${fmtGBP(insOther)}</strong>, Total: <strong>${fmtGBP(
-        insTotal
       )}</strong></p>
-        <p>Difference (ICE – EV): <strong>${fmtGBP(
-          Math.abs(insDiff)
-        )}</strong> (${insDiffText})</p>
+            <p>Shared (Both): <strong>${fmtGBP(insBoth)}</strong>, Other: <strong>${fmtGBP(
+        insOther
+      )}</strong></p>
+            <p>Total insurance: <strong>${fmtGBP(insTotal)}</strong></p>
+            <p>Difference (ICE – EV): <strong>${fmtGBP(
+              Math.abs(insDiff)
+            )}</strong> (${insDiffText})</p>
+          </div>
+        </details>
       `;
     }
 
-    // блок за зарядното
     let chargerBlock = "";
     if (data.publicRate && data.publicRate > 0) {
       const pr = data.publicRate;
@@ -466,71 +467,49 @@
       const remaining =
         typeof data.remainingToRecover === "number" ? data.remainingToRecover : null;
 
-      chargerBlock += `<h4 style="margin-top:10px;">Home charger payoff</h4>`;
-      chargerBlock += `<p>If all your EV kWh were at public price (£${pr.toFixed(
-        3
-      )}/kWh), cost would be <strong>${fmtGBP(allPub)}</strong>.</p>`;
-      chargerBlock += `<p>Your actual EV charging cost so far: <strong>${fmtGBP(
-        data.evCost
-      )}</strong>.</p>`;
+      let savedLine = "";
+      if (saved > 1) savedLine = `Saved vs all-public: <strong>${fmtGBP(saved)}</strong>.`;
+      else if (saved < -1)
+        savedLine = `Extra vs all-public: <strong>${fmtGBP(Math.abs(saved))}</strong>.`;
+      else savedLine = `Almost no difference vs all-public price.`;
 
-      const savedAbs = Math.abs(saved);
-      if (saved > 1) {
-        chargerBlock += `<p>Saved vs all-public: <strong>${fmtGBP(saved)}</strong>.</p>`;
-      } else if (saved < -1) {
-        chargerBlock += `<p>Extra vs all-public: <strong>${fmtGBP(
-          savedAbs
-        )}</strong> (your effective price is higher than public benchmark).</p>`;
-      } else {
-        chargerBlock += `<pAlmost no difference vs all-public price.</p>`;
-      }
-
+      let investLine = "";
       if (invest > 0 && remaining !== null) {
-        chargerBlock += `<p>Charger investment (hardware + install): <strong>${fmtGBP(
-          invest
-        )}</strong>.</p>`;
-
-        if (remaining > 1) {
-          chargerBlock += `<p>Still to recover: <strong>${fmtGBP(
-            remaining
-          )}</strong> from future savings vs public.</p>`;
-        } else if (remaining < -1) {
-          const over = Math.abs(remaining);
-          chargerBlock += `<p>Charger investment already recovered by about <strong>${fmtGBP(
-            over
-          )}</strong>.</p>`;
-        } else {
-          chargerBlock += `<p>Charger is roughly at break-even point.</p>`;
-        }
+        if (remaining > 1) investLine = `Still to recover: <strong>${fmtGBP(remaining)}</strong>.`;
+        else if (remaining < -1)
+          investLine = `Already recovered by about <strong>${fmtGBP(Math.abs(remaining))}</strong>.`;
+        else investLine = `Charger is roughly at break-even.`;
       }
+
+      chargerBlock = `
+        <details>
+          <summary style="cursor:pointer;"><strong>Home charger payoff (details)</strong></summary>
+          <div style="margin-top:6px;">
+            <p>Public benchmark: <strong>£${pr.toFixed(3)}</strong> / kWh</p>
+            <p>If all EV kWh were public: <strong>${fmtGBP(allPub)}</strong></p>
+            <p>Your actual EV charging cost: <strong>${fmtGBP(data.evCost)}</strong></p>
+            <p>${savedLine}</p>
+            ${
+              invest > 0
+                ? `<p>Charger investment (hardware + install): <strong>${fmtGBP(invest)}</strong></p>`
+                : ""
+            }
+            ${investLine ? `<p>${investLine}</p>` : ""}
+          </div>
+        </details>
+      `;
     }
 
     el.innerHTML = `
       ${topSummary}
-      <p>Total kWh (all time): <strong>${fmtNum(
-        data.totalKwh,
-        1
-      )}</strong></p>
-      <p>Estimated miles (@ ${fmtNum(
-        data.evMilesPerKwh,
-        1
-      )} mi/kWh): <strong>${fmtNum(miles, 0)}</strong></p>
-      <p>EV cost: <strong>${fmtGBP(data.evCost)}</strong></p>
-      <p>ICE cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
-      <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
-      <p>ICE £/mile: <strong>£${icePerMile.toFixed(3)}</strong></p>
-      <p>Difference: <strong>${fmtGBP(Math.abs(diff))}</strong> (${sign})</p>
-      ${extraLine}
+      ${energyBlock}
       ${maintBlock}
       ${insuranceBlock}
       ${chargerBlock}
-      <p class="small">
+      <p class="small" style="margin-top:10px;">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
       2
-    )}/litre unleaded, EV ${fmtNum(
-      data.evMilesPerKwh,
-      1
-    )} mi/kWh. For a quick feeling only.
+    )}/litre unleaded, EV ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh.
       </p>
     `;
   }
