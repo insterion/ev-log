@@ -131,7 +131,7 @@
     el.innerHTML = html;
   }
 
-  // ------- render costs -------
+  // ------- render costs (UPDATED: breakdown + collapsible totals) -------
 
   function renderCostTable(containerId, costs) {
     const el = document.getElementById(containerId);
@@ -143,6 +143,41 @@
     }
 
     const sorted = costs.slice().sort((a, b) => a.date.localeCompare(b.date));
+
+    // totals
+    const total = sorted.reduce((s, c) => s + (c.amount || 0), 0);
+
+    // totals by category
+    const catMap = new Map();
+    for (const c of sorted) {
+      const key = c.category || "Other";
+      const prev = catMap.get(key) || 0;
+      catMap.set(key, prev + (c.amount || 0));
+    }
+
+    const catRows = Array.from(catMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(
+        ([cat, sum]) => `<tr>
+          <td>${cat}</td>
+          <td>${fmtGBP(sum)}</td>
+        </tr>`
+      );
+
+    // totals by applies (For)
+    let sumEV = 0,
+      sumICE = 0,
+      sumBoth = 0,
+      sumOther = 0;
+
+    for (const c of sorted) {
+      const amt = Number(c.amount || 0) || 0;
+      const appliesRaw = (c.applies || "other").toLowerCase();
+      if (appliesRaw === "ev") sumEV += amt;
+      else if (appliesRaw === "ice") sumICE += amt;
+      else if (appliesRaw === "both") sumBoth += amt;
+      else sumOther += amt;
+    }
 
     const rows = sorted.map((c) => {
       const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
@@ -186,25 +221,6 @@
       </tr>`;
     });
 
-    const total = sorted.reduce((s, c) => s + (c.amount || 0), 0);
-
-    // totals by category
-    const catMap = new Map();
-    for (const c of sorted) {
-      const key = c.category || "Other";
-      const prev = catMap.get(key) || 0;
-      catMap.set(key, prev + (c.amount || 0));
-    }
-
-    const catRows = Array.from(catMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(
-        ([cat, sum]) => `<tr>
-          <td>${cat}</td>
-          <td>${fmtGBP(sum)}</td>
-        </tr>`
-      );
-
     const legend = `
       <p class="small" style="margin-top:8px;line-height:1.35;">
         <strong>For</strong> means which vehicle the cost applies to:
@@ -242,18 +258,36 @@
         </tfoot>
       </table>
 
-      <h4 style="margin-top:10px;">Totals by category</h4>
-      <table>
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Total £</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${catRows.join("")}
-        </tbody>
-      </table>
+      <details style="margin-top:10px;" open>
+        <summary style="cursor:pointer;"><strong>Totals by For</strong></summary>
+        <div style="margin-top:6px;">
+          <p style="margin:0 0 4px;">
+            EV: <strong>${fmtGBP(sumEV)}</strong> •
+            ICE: <strong>${fmtGBP(sumICE)}</strong>
+          </p>
+          <p style="margin:0;">
+            Both: <strong>${fmtGBP(sumBoth)}</strong> •
+            Other: <strong>${fmtGBP(sumOther)}</strong>
+          </p>
+        </div>
+      </details>
+
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
+        <div style="margin-top:6px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Total £</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${catRows.join("")}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
       ${legend}
     `;
@@ -395,8 +429,8 @@
           </p>
           <p style="margin:0;">
             Per 1000 miles: EV <strong>${fmtGBP(per1000Ev)}</strong>, ICE <strong>${fmtGBP(
-        per1000Ice
-      )}</strong> (${perText})
+              per1000Ice
+            )}</strong> (${perText})
           </p>
         </div>
       `;
@@ -422,9 +456,9 @@
         <div style="margin-top:6px;">
           <p>Total kWh (all time): <strong>${fmtNum(data.totalKwh, 1)}</strong></p>
           <p>Estimated miles (@ ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh): <strong>${fmtNum(
-      miles,
-      0
-    )}</strong></p>
+            miles,
+            0
+          )}</strong></p>
           <p>EV energy cost: <strong>${fmtGBP(data.evCost)}</strong></p>
           <p>ICE fuel cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
           <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
@@ -536,8 +570,8 @@
       ${chargerBlock}
       <p class="small" style="margin-top:10px;">
         Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
-      2
-    )}/litre unleaded, EV ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh.
+          2
+        )}/litre unleaded, EV ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh.
       </p>
     `;
   }
