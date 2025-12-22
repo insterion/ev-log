@@ -355,6 +355,46 @@
     const iceTotalAll = data.iceCost + maintIce;
     const diffAll = iceTotalAll - evTotalAll;
 
+    // ---- quick summary блок ----
+    let topSummary = "";
+    if (miles > 0) {
+      const per1000Ev = evPerMile * 1000;
+      const per1000Ice = icePerMile * 1000;
+      const per1000Diff = per1000Ice - per1000Ev;
+
+      let perText = "about the same per 1000 miles";
+      if (per1000Diff > 1) {
+        perText = "ICE more expensive per 1000 miles";
+      } else if (per1000Diff < -1) {
+        perText = "EV more expensive per 1000 miles";
+      }
+
+      let allText = "about the same overall";
+      if (diffAll > 1) {
+        allText = "ICE more expensive overall";
+      } else if (diffAll < -1) {
+        allText = "EV more expensive overall";
+      }
+
+      topSummary = `
+        <div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:#111;">
+          <p style="margin:0 0 4px;"><strong>Quick summary</strong></p>
+          <p style="margin:0 0 3px;">
+            All-in difference (ICE – EV): <strong>${fmtGBP(
+              Math.abs(diffAll)
+            )}</strong> (${allText})
+          </p>
+          <p style="margin:0;">
+            Per 1000 miles: EV <strong>${fmtGBP(
+              per1000Ev
+            )}</strong>, ICE <strong>${fmtGBP(
+        per1000Ice
+      )}</strong> (${perText})
+          </p>
+        </div>
+      `;
+    }
+
     let maintBlock = "";
     if (
       maintEv !== 0 ||
@@ -486,6 +526,7 @@
     }
 
     el.innerHTML = `
+      ${topSummary}
       <p>Total kWh (all time): <strong>${fmtNum(
         data.totalKwh,
         1
