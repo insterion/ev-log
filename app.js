@@ -1,4 +1,4 @@
-// app.js – main wiring for EV Log (with "applies to" + EV/ICE maintenance + Costs filter)
+// app.js – main wiring for EV Log (with "applies to" + EV/ICE maintenance + Costs filter + Insurance breakdown)
 
 (function () {
   const D = window.EVData;
@@ -18,7 +18,7 @@
     for (const c of state.costs) {
       if (!c) continue;
       if (!c.applies) {
-        // старите записи по подразбиране – other (може да смениш на "ev" ако искаш)
+        // старите записи по подразбиране – other (можеш да смениш на "ev" ако искаш)
         c.applies = "other";
       } else {
         c.applies = String(c.applies).toLowerCase();
@@ -227,6 +227,48 @@
     return computeMaintenanceTotals().total;
   }
 
+  // ---------- insurance totals (all-time, split EV/ICE) ----------
+
+  function computeInsuranceTotals() {
+    const costs = state.costs || [];
+    let evOnly = 0;
+    let iceOnly = 0;
+    let both = 0;
+    let other = 0;
+
+    for (const c of costs) {
+      if (!c) continue;
+      const amount = Number(c.amount ?? 0) || 0;
+      if (!amount) continue;
+
+      const cat = String(c.category || "").toLowerCase();
+      if (cat !== "insurance") continue;
+
+      const a = (c.applies || "other").toLowerCase();
+      if (a === "ev") {
+        evOnly += amount;
+      } else if (a === "ice") {
+        iceOnly += amount;
+      } else if (a === "both") {
+        both += amount;
+      } else {
+        other += amount;
+      }
+    }
+
+    const ev = evOnly + both;
+    const ice = iceOnly + both;
+    const total = evOnly + iceOnly + both + other;
+
+    return {
+      ev,
+      ice,
+      both,
+      other,
+      total
+    };
+  }
+
   function renderMaintenanceTotalInCosts() {
     try {
       const container = $("costTable");
@@ -367,13 +409,21 @@
       summary
     );
 
-    // EV vs ICE compare (енергия) + добавяме поддръжка в data
+    // EV vs ICE compare (енергия) + добавяме поддръжка и insurance в data
     const cmp = C.buildCompare(state.entries, state.settings);
+
     const mt = computeMaintenanceTotals();
     cmp.maintEv = mt.ev;
     cmp.maintIce = mt.ice;
     cmp.maintBoth = mt.both;
     cmp.maintOther = mt.other;
+
+    const ins = computeInsuranceTotals();
+    cmp.insuranceEv = ins.ev;
+    cmp.insuranceIce = ins.ice;
+    cmp.insuranceBoth = ins.both;
+    cmp.insuranceOther = ins.other;
+    cmp.insuranceTotal = ins.total;
 
     U.renderCompare("compareStats", cmp);
 
