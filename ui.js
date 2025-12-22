@@ -265,7 +265,8 @@
         </tfoot>
       </table>
 
-      <details style="margin-top:10px;" open>
+      <!-- CHANGED: removed "open" so it's collapsed by default -->
+      <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Totals by For</strong></summary>
         <div style="margin-top:6px;">
           <p style="margin:0 0 4px;">
@@ -563,15 +564,14 @@
       `;
     }
 
-    // NEW: assumptions collapsible (keeps screen clean on phone)
     const assumptionsBlock = `
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Assumptions</strong></summary>
         <div style="margin-top:6px;">
           <p class="small" style="margin:0;">
             ICE <strong>${data.iceMpg}</strong> mpg, £<strong>${data.icePerLitre.toFixed(
-      2
-    )}</strong>/litre unleaded,
+              2
+            )}</strong>/litre unleaded,
             EV <strong>${fmtNum(data.evMilesPerKwh, 1)}</strong> mi/kWh.
           </p>
         </div>
