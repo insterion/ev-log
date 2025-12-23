@@ -236,3 +236,35 @@ tr.total-row {
 #toast.info {
   background: #333;
 }
+
+/* --- Compact Actions column (safe add-on) --- */
+th.actcol,
+td.actcol {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.btn-mini {
+  border-radius: 18px;
+  border: 1px solid #333;
+  background: #111;
+  color: #f5f5f5;
+  padding: 4px 8px;
+  margin: 0 0 0 6px; /* override default button margins */
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.btn-mini.danger {
+  border-color: #c82929;
+  color: #ffb3b3;
+  background: #111;
+}
+
+@media (max-width: 520px) {
+  .btn-mini {
+    padding: 4px 6px;
+    font-size: 0.78rem;
+  }
+}
