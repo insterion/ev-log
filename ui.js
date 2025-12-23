@@ -61,27 +61,21 @@
           <td><span class="badge">${typeLabel}</span></td>
           <td>${fmtGBP(cost)}</td>
           <td>${safeNote}</td>
-          <td>
+          <td class="actcol">
             <button
               type="button"
-              class="btn-small"
+              class="btn-mini"
               data-action="edit-entry"
               data-id="${idAttr}"
               title="Edit this entry"
-              style="padding:2px 6px;font-size:0.8rem;margin-right:4px;"
-            >
-              Edit
-            </button>
+            >Edit</button>
             <button
               type="button"
-              class="btn-small"
+              class="btn-mini danger"
               data-action="delete-entry"
               data-id="${idAttr}"
               title="Delete this entry"
-              style="padding:2px 8px;font-size:0.8rem;"
-            >
-              ✕
-            </button>
+            >✕</button>
           </td>
         </tr>`;
       });
@@ -90,7 +84,6 @@
     const totalCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
     const sessions = entries.length;
 
-    // Collapsible "Total so far" (phone-friendly)
     const summaryBlock = `
       <details open style="margin:4px 0 8px;">
         <summary style="cursor:pointer;color:#cccccc;">
@@ -116,7 +109,7 @@
             <th>Type</th>
             <th>£</th>
             <th>Note</th>
-            <th>Actions</th>
+            <th class="actcol">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -129,7 +122,7 @@
             <td></td>
             <td>${fmtGBP(totalCost)}</td>
             <td></td>
-            <td></td>
+            <td class="actcol"></td>
           </tr>
         </tfoot>
       </table>
@@ -138,7 +131,7 @@
     el.innerHTML = html;
   }
 
-  // ------- render costs (with breakdown wrapper + quick breakdown line) -------
+  // ------- render costs -------
 
   function renderCostTable(containerId, costs) {
     const el = document.getElementById(containerId);
@@ -151,7 +144,42 @@
 
     const sorted = costs.slice().sort((a, b) => a.date.localeCompare(b.date));
 
-    // totals
+    const rows = sorted.map((c) => {
+      const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
+      const idAttr = c.id ? String(c.id) : "";
+
+      const appliesRaw = (c.applies || "other").toLowerCase();
+      let appliesLabel = "Other";
+      if (appliesRaw === "ev") appliesLabel = "EV";
+      else if (appliesRaw === "ice") appliesLabel = "ICE";
+      else if (appliesRaw === "both") appliesLabel = "Both";
+      else appliesLabel = "Other";
+
+      return `<tr>
+        <td>${fmtDate(c.date)}</td>
+        <td><span class="badge">${c.category}</span></td>
+        <td><span class="badge">${appliesLabel}</span></td>
+        <td>${fmtGBP(c.amount)}</td>
+        <td>${safeNote}</td>
+        <td class="actcol">
+          <button
+            type="button"
+            class="btn-mini"
+            data-action="edit-cost"
+            data-id="${idAttr}"
+            title="Edit this cost"
+          >Edit</button>
+          <button
+            type="button"
+            class="btn-mini danger"
+            data-action="delete-cost"
+            data-id="${idAttr}"
+            title="Delete this cost"
+          >✕</button>
+        </td>
+      </tr>`;
+    });
+
     const total = sorted.reduce((s, c) => s + (c.amount || 0), 0);
 
     // totals by category
@@ -171,79 +199,13 @@
         </tr>`
       );
 
-    // totals by applies (For)
-    let sumEV = 0,
-      sumICE = 0,
-      sumBoth = 0,
-      sumOther = 0;
-
-    for (const c of sorted) {
-      const amt = Number(c.amount || 0) || 0;
-      const appliesRaw = (c.applies || "other").toLowerCase();
-      if (appliesRaw === "ev") sumEV += amt;
-      else if (appliesRaw === "ice") sumICE += amt;
-      else if (appliesRaw === "both") sumBoth += amt;
-      else sumOther += amt;
-    }
-
-    const rows = sorted.map((c) => {
-      const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
-      const idAttr = c.id ? String(c.id) : "";
-
-      const appliesRaw = (c.applies || "other").toLowerCase();
-      let appliesLabel = "Other";
-      if (appliesRaw === "ev") appliesLabel = "EV";
-      else if (appliesRaw === "ice") appliesLabel = "ICE";
-      else if (appliesRaw === "both") appliesLabel = "Both";
-      else appliesLabel = "Other";
-
-      return `<tr>
-        <td>${fmtDate(c.date)}</td>
-        <td><span class="badge">${c.category}</span></td>
-        <td><span class="badge">${appliesLabel}</span></td>
-        <td>${fmtGBP(c.amount)}</td>
-        <td>${safeNote}</td>
-        <td>
-          <button
-            type="button"
-            class="btn-small"
-            data-action="edit-cost"
-            data-id="${idAttr}"
-            title="Edit this cost"
-            style="padding:2px 6px;font-size:0.8rem;margin-right:4px;"
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            class="btn-small"
-            data-action="delete-cost"
-            data-id="${idAttr}"
-            title="Delete this cost"
-            style="padding:2px 8px;font-size:0.8rem;"
-          >
-            ✕
-          </button>
-        </td>
-      </tr>`;
-    });
-
-    const legendText = `
-      <p class="small" style="margin:0;line-height:1.35;">
+    const legend = `
+      <p class="small" style="margin-top:8px;line-height:1.35;">
+        <strong>For</strong> means which vehicle the cost applies to:
         <strong>EV</strong> = electric car only,
         <strong>ICE</strong> = petrol/diesel car only,
         <strong>Both</strong> = shared/combined cost,
         <strong>Other</strong> = not tied to a specific car.
-      </p>
-    `;
-
-    const quickBreakdown = `
-      <p class="small" style="margin:8px 0 0;line-height:1.35;">
-        <strong>Quick breakdown:</strong>
-        EV <strong>${fmtGBP(sumEV)}</strong> •
-        ICE <strong>${fmtGBP(sumICE)}</strong> •
-        Both <strong>${fmtGBP(sumBoth)}</strong> •
-        Other <strong>${fmtGBP(sumOther)}</strong>
       </p>
     `;
 
@@ -256,7 +218,7 @@
             <th>For</th>
             <th>£</th>
             <th>Note</th>
-            <th>Actions</th>
+            <th class="actcol">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -269,55 +231,32 @@
             <td></td>
             <td>${fmtGBP(total)}</td>
             <td></td>
-            <td></td>
+            <td class="actcol"></td>
           </tr>
         </tfoot>
       </table>
 
-      ${quickBreakdown}
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
+        <div style="margin-top:6px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Total £</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${catRows.join("")}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
       <details style="margin-top:10px;">
-        <summary style="cursor:pointer;"><strong>Breakdowns</strong></summary>
-        <div style="margin-top:8px;">
-
-          <details style="margin-top:8px;">
-            <summary style="cursor:pointer;"><strong>Totals by For</strong></summary>
-            <div style="margin-top:6px;">
-              <p style="margin:0 0 4px;">
-                EV: <strong>${fmtGBP(sumEV)}</strong> •
-                ICE: <strong>${fmtGBP(sumICE)}</strong>
-              </p>
-              <p style="margin:0;">
-                Both: <strong>${fmtGBP(sumBoth)}</strong> •
-                Other: <strong>${fmtGBP(sumOther)}</strong>
-              </p>
-            </div>
-          </details>
-
-          <details style="margin-top:8px;">
-            <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
-            <div style="margin-top:6px;">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th>Total £</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${catRows.join("")}
-                </tbody>
-              </table>
-            </div>
-          </details>
-
-          <details style="margin-top:8px;">
-            <summary style="cursor:pointer;"><strong>What does “For” mean?</strong></summary>
-            <div style="margin-top:6px;">
-              ${legendText}
-            </div>
-          </details>
-
+        <summary style="cursor:pointer;"><strong>What does “For” mean?</strong></summary>
+        <div style="margin-top:6px;">
+          ${legend}
         </div>
       </details>
     `;
@@ -339,9 +278,7 @@
       const count = data.count != null ? data.count : null;
 
       const avgPrice =
-        data.avgPrice && data.avgPrice > 0
-          ? `£${data.avgPrice.toFixed(3)}/kWh`
-          : null;
+        data.avgPrice && data.avgPrice > 0 ? `£${data.avgPrice.toFixed(3)}/kWh` : null;
 
       const perDay =
         data.perDay && data.perDay > 0 ? fmtGBP(data.perDay) + "/day" : null;
@@ -351,9 +288,9 @@
           <strong>${kwh} kWh</strong> • <strong>${cost}</strong>
           ${count != null ? ` • <strong>${count}</strong> sessions` : ""}
         </p>
-        <p class="small" style="margin:0;">
-          ${avgPrice ? `Avg: <strong>${avgPrice}</strong>` : "Avg: n/a"}
-          ${perDay ? ` • ~ <strong>${perDay}</strong>` : ""}
+        <p style="margin:0;font-size:0.85rem;color:#b0b0b0;">
+          ${avgPrice ? `Avg: <strong style="color:#f5f5f5;">${avgPrice}</strong>` : "Avg: n/a"}
+          ${perDay ? ` • ~ <strong style="color:#f5f5f5;">${perDay}</strong>` : ""}
         </p>
       `;
     }
@@ -387,8 +324,10 @@
                   <strong>${fmtNum(summary.avg.kwh, 1)} kWh</strong> •
                   <strong>${fmtGBP(summary.avg.cost)}</strong>
                 </p>
-                <p class="small" style="margin:0;">
-                  Avg price: <strong>£${summary.avg.avgPrice.toFixed(3)}</strong> / kWh
+                <p style="margin:0;font-size:0.85rem;color:#b0b0b0;">
+                  Avg price: <strong style="color:#f5f5f5;">£${summary.avg.avgPrice.toFixed(
+                    3
+                  )}</strong> / kWh
                 </p>
               `
               : "<p>No data.</p>"
@@ -398,7 +337,7 @@
     `;
   }
 
-  // ------- render compare (CLEAN + COLLAPSIBLE + Assumptions collapsible) -------
+  // ------- render compare (CLEAN + COLLAPSIBLE) -------
 
   function renderCompare(containerId, data) {
     const el = document.getElementById(containerId);
@@ -450,15 +389,17 @@
       else if (diffAll < -1) allText = "EV more expensive overall";
 
       topSummary = `
-        <div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:#111;">
+        <div style="margin-bottom:8px;padding:6px 8px;border-radius:12px;background:#0a0a0a;border:1px solid #222;">
           <p style="margin:0 0 4px;"><strong>Quick summary</strong></p>
           <p style="margin:0 0 3px;">
-            All-in difference (ICE – EV): <strong>${fmtGBP(Math.abs(diffAll))}</strong> (${allText})
+            All-in difference (ICE – EV): <strong>${fmtGBP(
+              Math.abs(diffAll)
+            )}</strong> (${allText})
           </p>
           <p style="margin:0;">
             Per 1000 miles: EV <strong>${fmtGBP(per1000Ev)}</strong>, ICE <strong>${fmtGBP(
-              per1000Ice
-            )}</strong> (${perText})
+        per1000Ice
+      )}</strong> (${perText})
           </p>
         </div>
       `;
@@ -467,7 +408,9 @@
     // ---- Energy explanation (short) ----
     let energyExplain = "";
     if (diffEnergy > 1) {
-      energyExplain = `ICE would cost <strong>${fmtGBP(diffEnergy)}</strong> more for your recorded EV miles.`;
+      energyExplain = `ICE would cost <strong>${fmtGBP(
+        diffEnergy
+      )}</strong> more for your recorded EV miles.`;
     } else if (diffEnergy < -1) {
       energyExplain = `EV would cost <strong>${fmtGBP(
         Math.abs(diffEnergy)
@@ -482,9 +425,9 @@
         <div style="margin-top:6px;">
           <p>Total kWh (all time): <strong>${fmtNum(data.totalKwh, 1)}</strong></p>
           <p>Estimated miles (@ ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh): <strong>${fmtNum(
-            miles,
-            0
-          )}</strong></p>
+      miles,
+      0
+    )}</strong></p>
           <p>EV energy cost: <strong>${fmtGBP(data.evCost)}</strong></p>
           <p>ICE fuel cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
           <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
@@ -513,8 +456,9 @@
       )}</strong></p>
             <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(evTotalAll)}</strong></p>
             <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(iceTotalAll)}</strong></p>
-            <p>All-in difference (ICE – EV): <strong>${fmtGBP(Math.abs(diffAll))}</strong></p>
-            <p>${diffAllText}</p>
+            <p>All-in difference (ICE – EV): <strong>${fmtGBP(
+              Math.abs(diffAll)
+            )}</strong> (${diffAllText})</p>
           </div>
         </details>
       `;
@@ -537,8 +481,9 @@
         insOther
       )}</strong></p>
             <p>Total insurance: <strong>${fmtGBP(insTotal)}</strong></p>
-            <p>Difference (ICE – EV): <strong>${fmtGBP(Math.abs(insDiff))}</strong></p>
-            <p>${insDiffText}</p>
+            <p>Difference (ICE – EV): <strong>${fmtGBP(
+              Math.abs(insDiff)
+            )}</strong> (${insDiffText})</p>
           </div>
         </details>
       `;
@@ -586,27 +531,17 @@
       `;
     }
 
-    const assumptionsBlock = `
-      <details style="margin-top:10px;">
-        <summary style="cursor:pointer;"><strong>Assumptions</strong></summary>
-        <div style="margin-top:6px;">
-          <p class="small" style="margin:0;">
-            ICE <strong>${data.iceMpg}</strong> mpg, £<strong>${data.icePerLitre.toFixed(
-              2
-            )}</strong>/litre unleaded,
-            EV <strong>${fmtNum(data.evMilesPerKwh, 1)}</strong> mi/kWh.
-          </p>
-        </div>
-      </details>
-    `;
-
     el.innerHTML = `
       ${topSummary}
       ${energyBlock}
       ${maintBlock}
       ${insuranceBlock}
       ${chargerBlock}
-      ${assumptionsBlock}
+      <p style="margin-top:10px;font-size:0.85rem;color:#b0b0b0;">
+        Assumptions: ICE ${data.iceMpg} mpg, £${data.icePerLitre.toFixed(
+      2
+    )}/litre unleaded, EV ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh.
+      </p>
     `;
   }
 
