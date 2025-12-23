@@ -138,7 +138,7 @@
     el.innerHTML = html;
   }
 
-  // ------- render costs (with breakdown + collapsible totals) -------
+  // ------- render costs (with breakdown + collapsible totals + collapsible legend) -------
 
   function renderCostTable(containerId, costs) {
     const el = document.getElementById(containerId);
@@ -228,9 +228,8 @@
       </tr>`;
     });
 
-    const legend = `
-      <p class="small" style="margin-top:8px;line-height:1.35;">
-        <strong>For</strong> means which vehicle the cost applies to:
+    const legendText = `
+      <p class="small" style="margin:0;line-height:1.35;">
         <strong>EV</strong> = electric car only,
         <strong>ICE</strong> = petrol/diesel car only,
         <strong>Both</strong> = shared/combined cost,
@@ -279,7 +278,6 @@
         </div>
       </details>
 
-      <!-- CHANGED: removed "open" so it's collapsed by default -->
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
         <div style="margin-top:6px;">
@@ -297,7 +295,13 @@
         </div>
       </details>
 
-      ${legend}
+      <!-- NEW: collapsible legend -->
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;"><strong>What does “For” mean?</strong></summary>
+        <div style="margin-top:6px;">
+          ${legendText}
+        </div>
+      </details>
     `;
   }
 
