@@ -138,7 +138,7 @@
     el.innerHTML = html;
   }
 
-  // ------- render costs (with breakdown wrapper) -------
+  // ------- render costs (with breakdown wrapper + quick breakdown line) -------
 
   function renderCostTable(containerId, costs) {
     const el = document.getElementById(containerId);
@@ -237,6 +237,16 @@
       </p>
     `;
 
+    const quickBreakdown = `
+      <p class="small" style="margin:8px 0 0;line-height:1.35;">
+        <strong>Quick breakdown:</strong>
+        EV <strong>${fmtGBP(sumEV)}</strong> •
+        ICE <strong>${fmtGBP(sumICE)}</strong> •
+        Both <strong>${fmtGBP(sumBoth)}</strong> •
+        Other <strong>${fmtGBP(sumOther)}</strong>
+      </p>
+    `;
+
     el.innerHTML = `
       <table>
         <thead>
@@ -263,6 +273,8 @@
           </tr>
         </tfoot>
       </table>
+
+      ${quickBreakdown}
 
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Breakdowns</strong></summary>
