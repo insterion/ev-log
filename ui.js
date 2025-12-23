@@ -138,7 +138,7 @@
     el.innerHTML = html;
   }
 
-  // ------- render costs (with breakdown + collapsible totals + collapsible legend) -------
+  // ------- render costs (with breakdown wrapper) -------
 
   function renderCostTable(containerId, costs) {
     const el = document.getElementById(containerId);
@@ -265,41 +265,47 @@
       </table>
 
       <details style="margin-top:10px;">
-        <summary style="cursor:pointer;"><strong>Totals by For</strong></summary>
-        <div style="margin-top:6px;">
-          <p style="margin:0 0 4px;">
-            EV: <strong>${fmtGBP(sumEV)}</strong> •
-            ICE: <strong>${fmtGBP(sumICE)}</strong>
-          </p>
-          <p style="margin:0;">
-            Both: <strong>${fmtGBP(sumBoth)}</strong> •
-            Other: <strong>${fmtGBP(sumOther)}</strong>
-          </p>
-        </div>
-      </details>
+        <summary style="cursor:pointer;"><strong>Breakdowns</strong></summary>
+        <div style="margin-top:8px;">
 
-      <details style="margin-top:10px;">
-        <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
-        <div style="margin-top:6px;">
-          <table>
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Total £</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${catRows.join("")}
-            </tbody>
-          </table>
-        </div>
-      </details>
+          <details style="margin-top:8px;">
+            <summary style="cursor:pointer;"><strong>Totals by For</strong></summary>
+            <div style="margin-top:6px;">
+              <p style="margin:0 0 4px;">
+                EV: <strong>${fmtGBP(sumEV)}</strong> •
+                ICE: <strong>${fmtGBP(sumICE)}</strong>
+              </p>
+              <p style="margin:0;">
+                Both: <strong>${fmtGBP(sumBoth)}</strong> •
+                Other: <strong>${fmtGBP(sumOther)}</strong>
+              </p>
+            </div>
+          </details>
 
-      <!-- NEW: collapsible legend -->
-      <details style="margin-top:10px;">
-        <summary style="cursor:pointer;"><strong>What does “For” mean?</strong></summary>
-        <div style="margin-top:6px;">
-          ${legendText}
+          <details style="margin-top:8px;">
+            <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
+            <div style="margin-top:6px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Total £</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${catRows.join("")}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details style="margin-top:8px;">
+            <summary style="cursor:pointer;"><strong>What does “For” mean?</strong></summary>
+            <div style="margin-top:6px;">
+              ${legendText}
+            </div>
+          </details>
+
         </div>
       </details>
     `;
