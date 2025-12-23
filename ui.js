@@ -68,13 +68,15 @@
               data-action="edit-entry"
               data-id="${idAttr}"
               title="Edit this entry"
-            >Edit</button>
+              aria-label="Edit"
+            ><span class="ico">✎</span><span class="txt"> Edit</span></button>
             <button
               type="button"
               class="btn-mini danger"
               data-action="delete-entry"
               data-id="${idAttr}"
               title="Delete this entry"
+              aria-label="Delete"
             >✕</button>
           </td>
         </tr>`;
@@ -168,13 +170,15 @@
             data-action="edit-cost"
             data-id="${idAttr}"
             title="Edit this cost"
-          >Edit</button>
+            aria-label="Edit"
+          ><span class="ico">✎</span><span class="txt"> Edit</span></button>
           <button
             type="button"
             class="btn-mini danger"
             data-action="delete-cost"
             data-id="${idAttr}"
             title="Delete this cost"
+            aria-label="Delete"
           >✕</button>
         </td>
       </tr>`;
