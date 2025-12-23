@@ -267,4 +267,13 @@ td.actcol {
     padding: 4px 6px;
     font-size: 0.78rem;
   }
+
+  /* Hide the "Edit" text on phones and show only icon */
+  .btn-mini .txt {
+    display: none;
+  }
+  .btn-mini .ico {
+    display: inline;
+    font-size: 0.95rem;
+  }
 }
