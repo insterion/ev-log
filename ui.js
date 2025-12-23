@@ -38,9 +38,10 @@
       return;
     }
 
+    // NEWEST FIRST (descending)
     const rows = entries
       .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .map((e) => {
         const typeLabel =
           e.type === "public"
@@ -101,7 +102,7 @@
       </details>
     `;
 
-    const html = `
+    el.innerHTML = `
       ${summaryBlock}
       <table>
         <thead>
@@ -129,8 +130,6 @@
         </tfoot>
       </table>
     `;
-
-    el.innerHTML = html;
   }
 
   // ------- render costs -------
@@ -144,7 +143,10 @@
       return;
     }
 
-    const sorted = costs.slice().sort((a, b) => a.date.localeCompare(b.date));
+    // NEWEST FIRST (descending)
+    const sorted = costs
+      .slice()
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
     const rows = sorted.map((c) => {
       const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
@@ -186,7 +188,7 @@
 
     const total = sorted.reduce((s, c) => s + (c.amount || 0), 0);
 
-    // totals by category
+    // totals by category (unchanged)
     const catMap = new Map();
     for (const c of sorted) {
       const key = c.category || "Other";
@@ -462,7 +464,7 @@
             <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(iceTotalAll)}</strong></p>
             <p>All-in difference (ICE – EV): <strong>${fmtGBP(
               Math.abs(diffAll)
-            )}</strong> (${diffAllText})</p>
+            )}</strong></p>
           </div>
         </details>
       `;
