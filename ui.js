@@ -1,6 +1,10 @@
-// ui.js – formatting + rendering helpers
+// ui.js – formatting + rendering helpers (with apply-based filters)
 
 (function () {
+  // --- UI-only filter state (не се пази в localStorage) ---
+  let logFilterText = "";
+  let costFilterText = "";
+
   function fmtGBP(v) {
     if (isNaN(v)) return "£0.00";
     return "£" + v.toFixed(2);
@@ -27,6 +31,10 @@
     }, 1700);
   }
 
+  function safeLower(v) {
+    return String(v ?? "").toLowerCase();
+  }
+
   // ------- render charging log -------
 
   function renderLogTable(containerId, entries) {
@@ -38,54 +46,93 @@
       return;
     }
 
+    const filter = safeLower(logFilterText).trim();
+
     // NEWEST FIRST (descending)
-    const rows = entries
+    const sorted = entries
       .slice()
-      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map((e) => {
-        const typeLabel =
-          e.type === "public"
-            ? "Public"
-            : e.type === "public-xp"
-            ? "Public xp"
-            : e.type === "home"
-            ? "Home"
-            : "Home xp";
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-        const cost = e.kwh * e.price;
-        const safeNote = e.note ? e.note.replace(/</g, "&lt;") : "";
-        const idAttr = e.id ? String(e.id) : "";
+    const filtered = !filter
+      ? sorted
+      : sorted.filter((e) => {
+          const typeLabel =
+            e.type === "public"
+              ? "public"
+              : e.type === "public-xp"
+              ? "public xp"
+              : e.type === "home"
+              ? "home"
+              : "home xp";
 
-        return `<tr>
-          <td>${fmtDate(e.date)}</td>
-          <td>${fmtNum(e.kwh, 1)}</td>
-          <td><span class="badge">${typeLabel}</span></td>
-          <td>${fmtGBP(cost)}</td>
-          <td>${safeNote}</td>
-          <td class="actcol">
-            <button
-              type="button"
-              class="btn-mini"
-              data-action="edit-entry"
-              data-id="${idAttr}"
-              title="Edit this entry"
-              aria-label="Edit"
-            ><span class="ico">✎</span><span class="txt"> Edit</span></button>
-            <button
-              type="button"
-              class="btn-mini danger"
-              data-action="delete-entry"
-              data-id="${idAttr}"
-              title="Delete this entry"
-              aria-label="Delete"
-            >✕</button>
-          </td>
-        </tr>`;
-      });
+          const hay = [
+            e.date,
+            e.kwh,
+            e.price,
+            typeLabel,
+            e.type,
+            e.note || ""
+          ]
+            .map((x) => safeLower(x))
+            .join(" ");
 
-    const totalKwh = entries.reduce((s, e) => s + (e.kwh || 0), 0);
-    const totalCost = entries.reduce((s, e) => s + (e.kwh * e.price || 0), 0);
-    const sessions = entries.length;
+          return hay.includes(filter);
+        });
+
+    const rows = filtered.map((e) => {
+      const typeLabel =
+        e.type === "public"
+          ? "Public"
+          : e.type === "public-xp"
+          ? "Public xp"
+          : e.type === "home"
+          ? "Home"
+          : "Home xp";
+
+      const cost = e.kwh * e.price;
+      const safeNote = e.note ? e.note.replace(/</g, "&lt;") : "";
+      const idAttr = e.id ? String(e.id) : "";
+
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${fmtNum(e.kwh, 1)}</td>
+        <td><span class="badge">${typeLabel}</span></td>
+        <td>${fmtGBP(cost)}</td>
+        <td>${safeNote}</td>
+        <td class="actcol">
+          <button
+            type="button"
+            class="btn-mini"
+            data-action="edit-entry"
+            data-id="${idAttr}"
+            title="Edit this entry"
+            aria-label="Edit"
+          ><span class="ico">✎</span><span class="txt"> Edit</span></button>
+          <button
+            type="button"
+            class="btn-mini danger"
+            data-action="delete-entry"
+            data-id="${idAttr}"
+            title="Delete this entry"
+            aria-label="Delete"
+          >✕</button>
+        </td>
+      </tr>`;
+    });
+
+    const totalKwhAll = entries.reduce((s, e) => s + (e.kwh || 0), 0);
+    const totalCostAll = entries.reduce(
+      (s, e) => s + (e.kwh * e.price || 0),
+      0
+    );
+    const sessionsAll = entries.length;
+
+    const totalKwhShown = filtered.reduce((s, e) => s + (e.kwh || 0), 0);
+    const totalCostShown = filtered.reduce(
+      (s, e) => s + (e.kwh * e.price || 0),
+      0
+    );
+    const sessionsShown = filtered.length;
 
     const summaryBlock = `
       <details open style="margin:4px 0 8px;">
@@ -93,43 +140,100 @@
           <strong>Total so far</strong>
         </summary>
         <div style="margin-top:6px;font-size:0.85rem;color:#cccccc;">
-          <p style="margin:0;">
-            <strong>${fmtNum(totalKwh, 1)} kWh</strong> •
-            <strong>${fmtGBP(totalCost)}</strong> •
-            <strong>${sessions}</strong> sessions
+          <p style="margin:0 0 4px;">
+            All: <strong>${fmtNum(totalKwhAll, 1)} kWh</strong> •
+            <strong>${fmtGBP(totalCostAll)}</strong> •
+            <strong>${sessionsAll}</strong> sessions
           </p>
+          ${
+            filter
+              ? `<p style="margin:0;">
+                  Shown: <strong>${fmtNum(totalKwhShown, 1)} kWh</strong> •
+                  <strong>${fmtGBP(totalCostShown)}</strong> •
+                  <strong>${sessionsShown}</strong> sessions
+                </p>`
+              : ""
+          }
         </div>
       </details>
     `;
 
+    const filterBlock = `
+      <div style="margin:0 0 8px;display:flex;gap:6px;align-items:center;flex-wrap:nowrap;">
+        <input
+          id="logFilterInput"
+          type="text"
+          placeholder="Filter by date, note, type…"
+          value="${(logFilterText || "").replace(/"/g, "&quot;")}"
+          style="flex:1;min-width:0;"
+        />
+        <button id="logFilterApply" type="button">Apply</button>
+        <button id="logFilterClear" type="button">Clear</button>
+      </div>
+      <p class="small" style="margin:0 0 4px;color:#aaaaaa;">
+        Tip: type “home”, “public”, a date (2025-12-23), or a word from your note.
+      </p>
+    `;
+
     el.innerHTML = `
       ${summaryBlock}
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>kWh</th>
-            <th>Type</th>
-            <th>£</th>
-            <th>Note</th>
-            <th class="actcol">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.join("")}
-        </tbody>
-        <tfoot>
-          <tr class="total-row">
-            <td>Total</td>
-            <td>${fmtNum(totalKwh, 1)}</td>
-            <td></td>
-            <td>${fmtGBP(totalCost)}</td>
-            <td></td>
-            <td class="actcol"></td>
-          </tr>
-        </tfoot>
-      </table>
+      ${filterBlock}
+      ${
+        filtered.length
+          ? `<table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>kWh</th>
+                  <th>Type</th>
+                  <th>£</th>
+                  <th>Note</th>
+                  <th class="actcol">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.join("")}
+              </tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td>Total</td>
+                  <td>${fmtNum(totalKwhShown, 1)}</td>
+                  <td></td>
+                  <td>${fmtGBP(totalCostShown)}</td>
+                  <td></td>
+                  <td class="actcol"></td>
+                </tr>
+              </tfoot>
+            </table>`
+          : `<p class="small" style="margin-top:4px;">No matches for filter.</p>`
+      }
     `;
+
+    // Събития за филтъра – НЕ ререндваме при всяка буква
+    const inp = document.getElementById("logFilterInput");
+    const btnApply = document.getElementById("logFilterApply");
+    const btnClear = document.getElementById("logFilterClear");
+
+    if (inp) {
+      inp.addEventListener("input", () => {
+        // само пазим текста, не ререндваме
+        logFilterText = inp.value || "";
+      });
+    }
+
+    if (btnApply) {
+      btnApply.addEventListener("click", () => {
+        // при Apply ререндваме
+        renderLogTable(containerId, entries);
+      });
+    }
+
+    if (btnClear) {
+      btnClear.addEventListener("click", () => {
+        logFilterText = "";
+        renderLogTable(containerId, entries);
+      });
+    }
   }
 
   // ------- render costs -------
@@ -143,12 +247,30 @@
       return;
     }
 
+    const filter = safeLower(costFilterText).trim();
+
     // NEWEST FIRST (descending)
     const sorted = costs
       .slice()
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-    const rows = sorted.map((c) => {
+    const filtered = !filter
+      ? sorted
+      : sorted.filter((c) => {
+          const appliesRaw = (c.applies || "other").toLowerCase();
+          const hay = [
+            c.date,
+            c.category,
+            c.amount,
+            c.note || "",
+            appliesRaw
+          ]
+            .map((x) => safeLower(x))
+            .join(" ");
+          return hay.includes(filter);
+        });
+
+    const rows = filtered.map((c) => {
       const safeNote = c.note ? c.note.replace(/</g, "&lt;") : "";
       const idAttr = c.id ? String(c.id) : "";
 
@@ -186,9 +308,9 @@
       </tr>`;
     });
 
-    const total = sorted.reduce((s, c) => s + (c.amount || 0), 0);
+    const totalAll = sorted.reduce((s, c) => s + (c.amount || 0), 0);
+    const totalShown = filtered.reduce((s, c) => s + (c.amount || 0), 0);
 
-    // totals by category (unchanged)
     const catMap = new Map();
     for (const c of sorted) {
       const key = c.category || "Other";
@@ -215,36 +337,61 @@
       </p>
     `;
 
+    const filterBlock = `
+      <div style="margin:0 0 8px;display:flex;gap:6px;align-items:center;flex-wrap:nowrap;">
+        <input
+          id="costFilterInput"
+          type="text"
+          placeholder="Filter by category, note, EV/ICE…"
+          value="${(costFilterText || "").replace(/"/g, "&quot;")}"
+          style="flex:1;min-width:0;"
+        />
+        <button id="costFilterApply" type="button">Apply</button>
+        <button id="costFilterClear" type="button">Clear</button>
+      </div>
+      <p class="small" style="margin:0 0 4px;color:#aaaaaa;">
+        Tip: type “insurance”, “tyres”, “ev”, “ice”, or a word from your note.
+      </p>
+    `;
+
     el.innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Category</th>
-            <th>For</th>
-            <th>£</th>
-            <th>Note</th>
-            <th class="actcol">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.join("")}
-        </tbody>
-        <tfoot>
-          <tr class="total-row">
-            <td>Total</td>
-            <td></td>
-            <td></td>
-            <td>${fmtGBP(total)}</td>
-            <td></td>
-            <td class="actcol"></td>
-          </tr>
-        </tfoot>
-      </table>
+      ${filterBlock}
+      ${
+        filtered.length
+          ? `<table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Category</th>
+                  <th>For</th>
+                  <th>£</th>
+                  <th>Note</th>
+                  <th class="actcol">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.join("")}
+              </tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td>Total</td>
+                  <td></td>
+                  <td></td>
+                  <td>${fmtGBP(totalShown)}</td>
+                  <td></td>
+                  <td class="actcol"></td>
+                </tr>
+              </tfoot>
+            </table>`
+          : `<p class="small" style="margin-top:4px;">No matches for filter.</p>`
+      }
 
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;"><strong>Totals by category</strong></summary>
         <div style="margin-top:6px;">
+          <p class="small" style="margin:0 0 8px;">
+            All costs total: <strong>${fmtGBP(totalAll)}</strong>
+          </p>
           <table>
             <thead>
               <tr>
@@ -266,6 +413,29 @@
         </div>
       </details>
     `;
+
+    const inp = document.getElementById("costFilterInput");
+    const btnApply = document.getElementById("costFilterApply");
+    const btnClear = document.getElementById("costFilterClear");
+
+    if (inp) {
+      inp.addEventListener("input", () => {
+        costFilterText = inp.value || "";
+      });
+    }
+
+    if (btnApply) {
+      btnApply.addEventListener("click", () => {
+        renderCostTable(containerId, costs);
+      });
+    }
+
+    if (btnClear) {
+      btnClear.addEventListener("click", () => {
+        costFilterText = "";
+        renderCostTable(containerId, costs);
+      });
+    }
   }
 
   // ------- render summary (COMPACT + COLLAPSIBLE) -------
@@ -343,7 +513,7 @@
     `;
   }
 
-  // ------- render compare (CLEAN + COLLAPSIBLE) -------
+  // ------- render compare (както преди – clean + collapsible) -------
 
   function renderCompare(containerId, data) {
     const el = document.getElementById(containerId);
@@ -430,15 +600,17 @@
         <summary style="cursor:pointer;"><strong>Energy vs ICE (details)</strong></summary>
         <div style="margin-top:6px;">
           <p>Total kWh (all time): <strong>${fmtNum(data.totalKwh, 1)}</strong></p>
-          <p>Estimated miles (@ ${fmtNum(data.evMilesPerKwh, 1)} mi/kWh): <strong>${fmtNum(
-      miles,
-      0
-    )}</strong></p>
+          <p>Estimated miles (@ ${fmtNum(
+            data.evMilesPerKwh,
+            1
+          )} mi/kWh): <strong>${fmtNum(miles, 0)}</strong></p>
           <p>EV energy cost: <strong>${fmtGBP(data.evCost)}</strong></p>
           <p>ICE fuel cost (approx): <strong>${fmtGBP(data.iceCost)}</strong></p>
           <p>EV £/mile: <strong>£${evPerMile.toFixed(3)}</strong></p>
           <p>ICE £/mile: <strong>£${icePerMile.toFixed(3)}</strong></p>
-          <p>Difference (ICE – EV): <strong>${fmtGBP(Math.abs(diffEnergy))}</strong></p>
+          <p>Difference (ICE – EV): <strong>${fmtGBP(
+            Math.abs(diffEnergy)
+          )}</strong></p>
           <p>${energyExplain}</p>
         </div>
       </details>
@@ -454,14 +626,18 @@
         <details>
           <summary style="cursor:pointer;"><strong>Maintenance (details)</strong></summary>
           <div style="margin-top:6px;">
-            <p>Maintenance – EV: <strong>${fmtGBP(maintEv)}</strong>, ICE: <strong>${fmtGBP(
-        maintIce
-      )}</strong></p>
-            <p>Shared (Both): <strong>${fmtGBP(maintBoth)}</strong>, Other: <strong>${fmtGBP(
-        maintOther
-      )}</strong></p>
-            <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(evTotalAll)}</strong></p>
-            <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(iceTotalAll)}</strong></p>
+            <p>Maintenance – EV: <strong>${fmtGBP(
+              maintEv
+            )}</strong>, ICE: <strong>${fmtGBP(maintIce)}</strong></p>
+            <p>Shared (Both): <strong>${fmtGBP(
+              maintBoth
+            )}</strong>, Other: <strong>${fmtGBP(maintOther)}</strong></p>
+            <p>Total EV (energy + EV maintenance): <strong>${fmtGBP(
+              evTotalAll
+            )}</strong></p>
+            <p>Total ICE (fuel + ICE maintenance): <strong>${fmtGBP(
+              iceTotalAll
+            )}</strong></p>
             <p>All-in difference (ICE – EV): <strong>${fmtGBP(
               Math.abs(diffAll)
             )}</strong></p>
@@ -480,12 +656,12 @@
         <details>
           <summary style="cursor:pointer;"><strong>Insurance (details)</strong></summary>
           <div style="margin-top:6px;">
-            <p>Insurance – EV: <strong>${fmtGBP(insEv)}</strong>, ICE: <strong>${fmtGBP(
-        insIce
-      )}</strong></p>
-            <p>Shared (Both): <strong>${fmtGBP(insBoth)}</strong>, Other: <strong>${fmtGBP(
-        insOther
-      )}</strong></p>
+            <p>Insurance – EV: <strong>${fmtGBP(
+              insEv
+            )}</strong>, ICE: <strong>${fmtGBP(insIce)}</strong></p>
+            <p>Shared (Both): <strong>${fmtGBP(
+              insBoth
+            )}</strong>, Other: <strong>${fmtGBP(insOther)}</strong></p>
             <p>Total insurance: <strong>${fmtGBP(insTotal)}</strong></p>
             <p>Difference (ICE – EV): <strong>${fmtGBP(
               Math.abs(insDiff)
@@ -505,16 +681,22 @@
         typeof data.remainingToRecover === "number" ? data.remainingToRecover : null;
 
       let savedLine = "";
-      if (saved > 1) savedLine = `Saved vs all-public: <strong>${fmtGBP(saved)}</strong>.`;
+      if (saved > 1)
+        savedLine = `Saved vs all-public: <strong>${fmtGBP(saved)}</strong>.`;
       else if (saved < -1)
-        savedLine = `Extra vs all-public: <strong>${fmtGBP(Math.abs(saved))}</strong>.`;
+        savedLine = `Extra vs all-public: <strong>${fmtGBP(
+          Math.abs(saved)
+        )}</strong>.`;
       else savedLine = `Almost no difference vs all-public price.`;
 
       let investLine = "";
       if (invest > 0 && remaining !== null) {
-        if (remaining > 1) investLine = `Still to recover: <strong>${fmtGBP(remaining)}</strong>.`;
+        if (remaining > 1)
+          investLine = `Still to recover: <strong>${fmtGBP(remaining)}</strong>.`;
         else if (remaining < -1)
-          investLine = `Already recovered by about <strong>${fmtGBP(Math.abs(remaining))}</strong>.`;
+          investLine = `Already recovered by about <strong>${fmtGBP(
+            Math.abs(remaining)
+          )}</strong>.`;
         else investLine = `Charger is roughly at break-even.`;
       }
 
@@ -528,7 +710,9 @@
             <p>${savedLine}</p>
             ${
               invest > 0
-                ? `<p>Charger investment (hardware + install): <strong>${fmtGBP(invest)}</strong></p>`
+                ? `<p>Charger investment (hardware + install): <strong>${fmtGBP(
+                    invest
+                  )}</strong></p>`
                 : ""
             }
             ${investLine ? `<p>${investLine}</p>` : ""}
