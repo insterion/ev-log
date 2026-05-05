@@ -76,7 +76,17 @@
       avgPrice: totalKwh > 0 ? totalCost / totalKwh : 0
     };
 
-    return { thisMonth, lastMonth, avg };
+    // all months with full stats (for month picker)
+    const allMonths = {};
+    for (const k of keys) {
+      const t = monthTotals(map.get(k));
+      const dim = daysInMonthKey(k);
+      t.avgPrice = t.kwh > 0 ? t.cost / t.kwh : 0;
+      t.perDay = dim > 0 ? t.cost / dim : 0;
+      allMonths[k] = t;
+    }
+
+    return { thisMonth, lastMonth, avg, allMonths, monthKeys: keys };
   }
 
   function buildCompare(entries, settings) {
