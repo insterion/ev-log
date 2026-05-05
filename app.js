@@ -405,7 +405,7 @@
 
     const summary = C.buildSummary(state.entries);
     U.renderSummary(
-      ["summary_this", "summary_last", "summary_avg"],
+      ["summary_this", "summary_last", "summary_avg", "summary_pick"],
       summary
     );
 
