@@ -441,7 +441,7 @@
   // ------- render summary (COMPACT + COLLAPSIBLE) -------
 
   function renderSummary(containerIds, summary) {
-    const [idThis, idLast, idAvg] = containerIds.map((id) =>
+    const [idThis, idLast, idAvg, idPick] = containerIds.map((id) =>
       document.getElementById(id)
     );
     if (!idThis || !idLast || !idAvg) return;
@@ -511,6 +511,57 @@
         </div>
       </details>
     `;
+
+    // ---- Month picker ----
+    if (idPick) {
+      const monthKeys = summary.monthKeys || [];
+      const allMonths = summary.allMonths || {};
+
+      if (!monthKeys.length) {
+        idPick.innerHTML = "<p>No data.</p>";
+      } else {
+        // Keep previously selected month if it still exists
+        const prevSel = idPick.querySelector("select") && idPick.querySelector("select").value;
+        const defaultKey = monthKeys[monthKeys.length - 1]; // most recent
+        const selectedKey = (prevSel && allMonths[prevSel]) ? prevSel : defaultKey;
+
+        function renderPickContent(key) {
+          const d = allMonths[key];
+          return compactLines(d);
+        }
+
+        const options = monthKeys
+          .slice()
+          .reverse() // newest first in dropdown
+          .map((k) => `<option value="${k}"${k === selectedKey ? " selected" : ""}>${k}</option>`)
+          .join("");
+
+        idPick.innerHTML = `
+          <div style="margin-bottom:8px;">
+            <select id="summary_month_picker" style="padding:4px 8px;border-radius:8px;background:#111;color:#f5f5f5;border:1px solid #333;font-size:0.95rem;">
+              ${options}
+            </select>
+          </div>
+          <details open>
+            <summary style="cursor:pointer;"><strong id="summary_pick_label">${selectedKey}</strong></summary>
+            <div style="margin-top:6px;" id="summary_pick_content">
+              ${renderPickContent(selectedKey)}
+            </div>
+          </details>
+        `;
+
+        const sel = document.getElementById("summary_month_picker");
+        if (sel) {
+          sel.addEventListener("change", () => {
+            const key = sel.value;
+            const label = document.getElementById("summary_pick_label");
+            const content = document.getElementById("summary_pick_content");
+            if (label) label.textContent = key;
+            if (content) content.innerHTML = renderPickContent(key);
+          });
+        }
+      }
+    }
   }
 
   // ------- render compare (както преди – clean + collapsible) -------
